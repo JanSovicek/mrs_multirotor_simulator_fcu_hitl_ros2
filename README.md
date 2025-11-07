@@ -16,3 +16,5 @@ This package provides a minimalistic dynamics simulator for multirotor UAVs.
 * A ROS wrapper for an individual UAV.
 * A ROS simulator packed for multir-UAV simulation with mutual collisions and a ground plane.
 * The barebone simulation work with hundreds of UAVs in real time.
+
+## Test modification to see how git reacts
