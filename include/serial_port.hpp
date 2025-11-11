@@ -2,6 +2,7 @@
 #define SERIAL_PORT_HPP_
 
 #include <stdio.h>    // Standard input/output definitions
+#include <stdint.h>   // Standart types definitions
 #include <string.h>   // String function definitions
 #include <unistd.h>   // UNIX standard function definitions
 #include <fcntl.h>    // File control definitions
