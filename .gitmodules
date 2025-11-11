@@ -1,0 +1,6 @@
+[submodule "umsg/umsg_def"]
+	path = umsg/umsg_def
+	url = git@mrs.fel.cvut.cz:hw-group/mrs_fcu/umsg_def.git
+[submodule "umsg/umsg"]
+	path = umsg/umsg
+	url = git@mrs.fel.cvut.cz:hw-group/mrs_fcu/umsg.git

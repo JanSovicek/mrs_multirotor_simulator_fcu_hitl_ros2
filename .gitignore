@@ -10,3 +10,6 @@
 
 # Runtime-python
 *.pyc
+
+# Generated code
+umsg/umsg_lib
