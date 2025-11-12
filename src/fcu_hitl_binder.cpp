@@ -36,7 +36,8 @@
 #include <mrs_lib/subscribe_handler.h>
 #include <mrs_lib/gps_conversions.h>
 
-#include "serial_port.h"
+#include "serial_port.hpp"
+#include "serial_api.hpp"
 
 #include <umsg.h>
 #include <umsg_classes.h>
@@ -76,7 +77,6 @@ namespace mrs_fcu_hitl_binder
         // | ------------------------- timers ------------------------- |
 
         std::thread recvThread_;
-        void Receiver();
         rclcpp::TimerBase::SharedPtr timer_sync_;
         void                         timerSync();
 
@@ -89,10 +89,7 @@ namespace mrs_fcu_hitl_binder
 
         // | ------------------------- methods ------------------------ |
 
-        void calculateDelay(umsg_state_heartbeat_t heartbeat);
-        uint32_t RosToFcu(rclcpp::Time &rosTime);
-        rclcpp::Time FcuToRos(uint32_t &FcuTime);
-        void publishPosEst(umsg_estimation_position_t &msg);
+        std::shared_ptr<SerialApi> ser_api_;
 
         // | ----------------------- dynamic params ------------------- |
     };
@@ -197,10 +194,11 @@ namespace mrs_fcu_hitl_binder
 
         // | ----------------------- finish init ---------------------- |
         umsg_CRCInit();
-        is_initialized_ = true;
-        recvThread_ = std::thread([this]
-                                  { this->Receiver(); });
+        
+        ser_api_ = std::make_shared<SerialApi>(node_);
+        ser_api_->startReceiver();
 
+        is_initialized_ = true;
         RCLCPP_INFO(node_->get_logger(), "[FcuHitlBinder]: initialized");
     }
 
