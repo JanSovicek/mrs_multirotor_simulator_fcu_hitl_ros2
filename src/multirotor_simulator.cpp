@@ -12,6 +12,7 @@
 #include <mrs_lib/node.h>
 #include <mrs_lib/scope_timer.h>
 
+
 #include <KDTreeVectorOfVectorsAdaptor.h>
 #include <Eigen/Dense>
 #include <vector>

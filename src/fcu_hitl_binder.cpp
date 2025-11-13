@@ -52,7 +52,7 @@ namespace mrs_fcu_hitl_binder
     {
 
     public:
-        FcuHiltBinder(rclcpp::NodeOptions options);
+        FcuHitlBinder::FcuHiltBinder(rclcpp::NodeOptions options);
 
     private:
         rclcpp::CallbackGroup::SharedPtr cbgrp_main_;

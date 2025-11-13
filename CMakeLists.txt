@@ -47,7 +47,8 @@ set(DEPENDENCIES
 set(LIBRARIES
   MrsMultirotorSimulator_Simulator
   MrsMultirotorSimulator_SimulatorSystemRos
-  MrsMultirotorSimulator_HwApiPlugin
+  MrsMultirotorSimulator_HwApiMrsFcu
+  MrsMultirotorSimulator_FcuBinder
   )
 
 foreach(DEP IN LISTS DEPENDENCIES)
@@ -68,6 +69,7 @@ include_directories(
 
 add_library(MrsMultirotorSimulator_SimulatorSystemRos SHARED
   src/uav_system_ros.cpp
+  src/iir_filter.ccp
 )
 
 ament_target_dependencies(MrsMultirotorSimulator_SimulatorSystemRos
@@ -90,17 +92,61 @@ ament_target_dependencies(MrsMultirotorSimulator_Simulator
 
 rclcpp_components_register_nodes(MrsMultirotorSimulator_Simulator PLUGIN "mrs_multirotor_simulator::MultirotorSimulator" EXECUTABLE MrsMultirotorSimulator_Simulator)
 
-# HW Api Plugin
+# UMSG Library
 
-add_library(MrsMultirotorSimulator_HwApiPlugin SHARED
-  src/hw_api_plugin.cpp
-)
+set(UMSG_PORT "POSIX")
+add_subdirectory(umsg_lib)
 
-ament_target_dependencies(MrsMultirotorSimulator_HwApiPlugin
+
+# HW API MRS FCU
+# Plugin library for interfacing Simulator with FCU HW
+
+add_library(MrsMultirotorSimulator_HwApiMrsFcu SHARED
+  src/hw_api_mrs_fcu.cpp
+  src/serial_port.cpp
+  src/SerialApi.cpp
+  )
+
+target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu
+  uMsgLib
+  )
+
+ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsApi
   ${DEPENDENCIES}
 )
 
-target_compile_definitions(MrsMultirotorSimulator_HwApiPlugin PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
+
+# FCU HITL Binder
+# Interfacing FCU with HITL simulation
+
+
+add_library(MrsMultirotorSimulator_FcuHiltBinder
+  src/fcu_hilt_binder.cpp
+  src/serial_port.cpp
+  )
+
+target_link_libraries(MrsMultirotorSimulator_FcuHiltBinder
+  uMsgLib
+  )
+
+ament_target_dependencies(MrsMultirotorSimulator_FcuHiltBinder
+  ${DEPENDENCIES}
+)
+
+rclcpp_components_register_nodes(MrsMultirotorSimulator_FcuHitlBinder PLUGIN "mrs_hitl_binders::FcuHitlBinder" EXECUTABLE MrsMultirotorSimulator_FcuHitlBinder)
+
+
+## HW Api Plugin
+#
+#add_library(MrsMultirotorSimulator_HwApiPlugin SHARED
+#  src/hw_api_plugin.cpp
+#)
+#
+#ament_target_dependencies(MrsMultirotorSimulator_HwApiPlugin
+#  ${DEPENDENCIES}
+#)
+#
+#target_compile_definitions(MrsMultirotorSimulator_HwApiPlugin PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
 ## --------------------------------------------------------------
 ## |                       Export plugins                       |
