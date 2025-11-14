@@ -169,7 +169,7 @@ void SerialApi::Receiver()
     int readBytes = 0; // amount of read bytes
     int toRead = 0;    // amount of bytes needed to read
     int toFlush = 0;
-    while (true)
+    while (rclcpp::ok)
     {
         switch (state)
         {

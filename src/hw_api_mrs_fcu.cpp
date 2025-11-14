@@ -70,16 +70,16 @@ namespace mrs_uav_fcu_api
         mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry> sh_altitude_;
         mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField> sh_mag_;
 
-        void callbackOdometry(const nav_msgs::Odometry::ConstPtr msg);
-        void callbackIMU(const sensor_msgs::Imu::ConstPtr msg);
-        void callbackRangeFinder(const sensor_msgs::Range::ConstPtr msg);
-        void callbackAltitude(const nav_msgs::Odometry::ConstPtr msg);
-        void callbackMag(const sensor_msgs::MagneticField::ConstPtr msg);
+        void callbackOdometry(const nav_msgs::msg::Odometry::ConstPtr msg);
+        void callbackIMU(const sensor_msgs::msg::Imu::ConstPtr msg);
+        void callbackRangeFinder(const sensor_msgs::msg::Range::ConstPtr msg);
+        void callbackAltitude(const nav_msgs::msg::Odometry::ConstPtr msg);
+        void callbackMag(const sensor_msgs::msg::MagneticField::ConstPtr msg);
 
-        void publishImu(const sensor_msgs::Imu::ConstPtr msg, rclcpp::Time &sim_time);
-        void publishMag(const sensor_msgs::MagneticField::ConstPtr msg, rclcpp::Time &sim_time);
-        void publishAltitude(const nav_msgs::Odometry::ConstPtr msg, rclcpp::Time &sim_time);
-        void publishGps(const nav_msgs::Odometry::ConstPtr msg, rclcpp::Time &sim_time);
+        void publishImu(const sensor_msgs::msg::Imu::ConstPtr msg, rclcpp::Time &sim_time);
+        void publishMag(const sensor_msgs::msg::MagneticField::ConstPtr msg, rclcpp::Time &sim_time);
+        void publishAltitude(const nav_msgs::msg::Odometry::ConstPtr msg, rclcpp::Time &sim_time);
+        void publishGps(const nav_msgs::msg::Odometry::ConstPtr msg, rclcpp::Time &sim_time);
 
         // | ----------------------- publishers ----------------------- |
         mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd> ph_actuator_cmd_;
@@ -119,14 +119,14 @@ namespace mrs_uav_fcu_api
         shopts.subscription_options.callback_group = cbgrp_subs_;
 
         /*Initialize subscribers*/
-        sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::Imu>(shopts, "hitl/imu", &hitl_binder::callbackIMU, this);
-        sh_odom_ = mrs_lib::SubscriberHandler<nav_msgs::Odometry>(shopts, "hitl/odom", &hitl_binder::callbackOdometry, this);
+        sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "hitl/imu", &hitl_binder::callbackIMU, this);
+        sh_odom_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "hitl/odom", &hitl_binder::callbackOdometry, this);
         //sh_rangefinder_ = mrs_lib::SubscriberHandler<sensor_msgs::Range>(shopts, "hitl/rangefinder", &hitl_binder::callbackRangeFinder, this);
-        sh_altitude_ = mrs_lib::SubscriberHandler<nav_msgs::Odometry>(shopts, "hitl/altitude", &hitl_binder::callbackAltitude, this);
-        sh_mag_ = mrs_lib::SubscriberHandler<sensor_msgs::MagneticField>(shopts, "hitl/magnetometer", &hitl_binder::callbackMag, this);
+        sh_altitude_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "hitl/altitude", &hitl_binder::callbackAltitude, this);
+        sh_mag_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField>(shopts, "hitl/magnetometer", &hitl_binder::callbackMag, this);
 
         /*Initialize publishers*/
-        ph_actuator_cmd_ = mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd>(node_, "hitl/actuators_cmd", 1, false);
+        ph_actuator_cmd_ = mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd>(node_, "hitl/actuators_cmd");
 
         RCLCPP_INFO(node_->get_logger(),"Subscribers and Publishers initialized");
     };
@@ -169,7 +169,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(out);
     } /*//}*/ /*//}*/
 
-    void hitl_binder::publishMag(const sensor_msgs::MagneticField::ConstPtr msg, rclcpp::Time &sim_time)
+    void hitl_binder::publishMag(const sensor_msgs::msg::MagneticField::ConstPtr msg, rclcpp::Time &sim_time)
     {
         /*Set header*/
         umsg_MessageToTransfer out;
@@ -177,7 +177,8 @@ namespace mrs_uav_fcu_api
         out.s.sync1 = 'R';
         out.s.msg_class = UMSG_SENSORS;
         out.s.msg_type = SENSORS_MAG;
-        // ROS_INFO("[FCU BINDER] %f %f %f",R(0,0),R(1,0),R(2,0));
+
+        //RCLCPP_INFO(node_->get_logger(), "[FCU BINDER] %f %f %f",R(0,0),R(1,0),R(2,0));
 
         /*Set payload*/
         out.s.sensors.mag.mag[0] = static_cast<float>(msg->magnetic_field.x);
@@ -195,7 +196,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(out);
     }
 
-    void hitl_binder::publishAltitude(const nav_msgs::Odometry::ConstPtr msg, rclcpp::Time &sim_time)
+    void hitl_binder::publishAltitude(const nav_msgs::msg::Odometry::ConstPtr msg, rclcpp::Time &sim_time)
     {
         /*Set header*/
         umsg_MessageToTransfer out;
@@ -218,7 +219,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(out);
     }
 
-    void hitl_binder::publishGps(const nav_msgs::Odometry::ConstPtr msg, rclcpp::Time &sim_time)
+    void hitl_binder::publishGps(const nav_msgs::msg::Odometry::ConstPtr msg, rclcpp::Time &sim_time)
     {
         /*Set header*/
         umsg_MessageToTransfer out;
@@ -267,7 +268,7 @@ namespace mrs_uav_fcu_api
 
     /*| ------------------------- callbacks ------------------------- |*/
 
-    void hitl_binder::callbackOdometry(const nav_msgs::Odometry::ConstPtr msg)
+    void hitl_binder::callbackOdometry(const nav_msgs::msg::Odometry::ConstPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -291,7 +292,7 @@ namespace mrs_uav_fcu_api
         rclcpp::Time sim_time = msg->header.stamp;
         publishGps(msg, sim_time);
         notifyMsg.s.sensors.notifySensorData.GPS = 1;
-        ROS_INFO_ONCE("[HITLBinder]: GPS CALLBACK called");
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[HITLBinder]: GPS CALLBACK called");
 
         /*Set time, length and CRC*/
         notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
@@ -304,7 +305,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(notifyMsg);
     }
 
-    void hitl_binder::callbackIMU(const sensor_msgs::Imu::ConstPtr msg)
+    void hitl_binder::callbackIMU(const sensor_msgs::msg::Imu::ConstPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -329,7 +330,7 @@ namespace mrs_uav_fcu_api
         /*Publish Imu*/
         publishImu(msg, sim_time);
         notifyMsg.s.sensors.notifySensorData.imu = 1;
-        ROS_INFO_ONCE("[HITLBinder]: IMU CALLBACK called");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[HITLBinder]: IMU CALLBACK called");
 
         notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
         uint32_t len = UMSG_HEADER_SIZE;
@@ -339,16 +340,16 @@ namespace mrs_uav_fcu_api
 
         /*Send notifyMsg message*/
         ser_->sendPacket(notifyMsg);
-        //  ROS_INFO("[FcuBinder]: IMU Duration %d",diff_to_now.toNSec());
-        //   toto send the message over the serial
+        //  RCLCPP_INFO(node_->get_logger(),"[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
+        //  todo send the message over the serial
     }
 
-    void hitl_binder::callbackRangeFinder(const sensor_msgs::Range::ConstPtr msg)
+    void hitl_binder::callbackRangeFinder(const sensor_msgs::msg::Range::ConstPtr msg)
     {
-        ROS_WARN_ONCE("rangefinder callback not yet implemented");
+        RCLCPP_WARN_ONCE(node_->get_logger(),"rangefinder callback not yet implemented");
     }
 
-    void hitl_binder::callbackAltitude(const nav_msgs::Odometry::ConstPtr msg)
+    void hitl_binder::callbackAltitude(const nav_msgs::msg::Odometry::ConstPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -370,7 +371,7 @@ namespace mrs_uav_fcu_api
 
         publishAltitude(msg, sim_time);
         notifyMsg.s.sensors.notifySensorData.altimeter = 1;
-        ROS_INFO_ONCE("[HITLBinder]: Altitude CALLBACK called");
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[HITLBinder]: Altitude CALLBACK called");
 
         notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
         uint32_t len = UMSG_HEADER_SIZE;
@@ -378,11 +379,11 @@ namespace mrs_uav_fcu_api
         notifyMsg.s.len = len;
         notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
         ser_->sendPacket(notifyMsg);
-        // ROS_INFO("[FcuBinder]: IMU Duration %d",diff_to_now.toNSec());
-        //  toto send the message over the serial
+        //RCLCPP_INFO(node_->get_logger(), "[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
+        //  todo send the message over the serial
     }
 
-    void hitl_binder::callbackMag(const sensor_msgs::MagneticField::ConstPtr msg)
+    void hitl_binder::callbackMag(const sensor_msgs::msg::MagneticField::ConstPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -404,7 +405,7 @@ namespace mrs_uav_fcu_api
 
         publishMag(msg, sim_time);
         notifyMsg.s.sensors.notifySensorData.magnetometer = 1;
-        ROS_INFO_ONCE("[FcuBinder]: mag CALLBACK called");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[FcuBinder]: mag CALLBACK called");
 
         notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
         uint32_t len = UMSG_HEADER_SIZE;
@@ -412,8 +413,8 @@ namespace mrs_uav_fcu_api
         notifyMsg.s.len = len;
         notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
         ser_->sendPacket(notifyMsg);
-        // ROS_INFO("[FcuBinder]: IMU Duration %d",diff_to_now.toNSec());
-        //  toto send the message over the serial
+        // RCLCPP_INFO(node_->get_logger(),"[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
+        //  todo send the message over the serial
     }
 
     bool hitl_binder::ParseMessage(umsg_MessageToTransfer &msg)
@@ -425,38 +426,45 @@ namespace mrs_uav_fcu_api
 
         switch (msg_class)
         {
-        case UMSG_CONTROL:
-        {
-            switch (msg_type)
+            case UMSG_CONTROL:
             {
-                ROS_INFO("received DSHOT MSG");
-            case CONTROL_DSHOTMESSAGE:
-            {
-                mrs_msgs::HwApiActuatorCmd cmd;
-                umsg_control_DshotMessage_t DshotMessage = msg.s.control.DshotMessage;
-                cmd.stamp = ser_->FcuToRos(DshotMessage.timestamp);
+                RCLCPP_INFO(node_->get_logger(), "received DSHOT MSG");
 
-                for (size_t i = 0; i < 4; i++)
-                {
-                    cmd.motors.push_back(static_cast<float>(DshotMessage.channels[i] - 48) / 2048.);
-                }
-                ph_actuator_cmd_.publish(cmd);
+                switch (msg_type)
+                {    
+                    case CONTROL_DSHOTMESSAGE:
+                    {
+                        mrs_msgs::msg::HwApiActuatorCmd cmd;
+                        umsg_control_DshotMessage_t DshotMessage = msg.s.control.DshotMessage;
+                        cmd.stamp = ser_->FcuToRos(DshotMessage.timestamp);
+
+                        for (size_t i = 0; i < 4; i++)
+                        {
+                            cmd.motors.push_back(static_cast<float>(DshotMessage.channels[i] - 48) / 2048.);
+                        }
+                        ph_actuator_cmd_.publish(cmd);
+                    }
+                    break;
+
+                    default:
+                        parsed = false;
+                        break;
+                } 
             }
             break;
 
             default:
                 parsed = false;
                 break;
-            }
-        }
-        break;
-
-        default:
-            parsed = false;
-            break;
         }
         return parsed;
     }
+
+    /**###############################################################
+    * --------------------------------------------------------------
+    * |                   controller's interface                   |
+    * --------------------------------------------------------------
+    * ################################################################*/
 
     /* class MrsUavFcuApi //{ */
 
@@ -466,25 +474,27 @@ namespace mrs_uav_fcu_api
     public:
         ~MrsUavFcuApi() {};
 
-        void initialize(const ros::NodeHandle &parent_node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers);
+        void initialize(const rclcpp::Node::SharedPtr &parent_node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers);
+
+        rclcpp::CallbackGroup::SharedPtr cbgrp_subs_;
 
         // | --------------------- status methods --------------------- |
 
-        mrs_msgs::HwApiStatus getStatus();
-        mrs_msgs::HwApiCapabilities getCapabilities();
+        mrs_msgs::msg::HwApiStatus getStatus();
+        mrs_msgs::msg::HwApiCapabilities getCapabilities();
 
         // | --------------------- topic callbacks -------------------- |
 
-        bool callbackActuatorCmd(const mrs_msgs::HwApiActuatorCmd::ConstPtr msg);
-        bool callbackControlGroupCmd(const mrs_msgs::HwApiControlGroupCmd::ConstPtr msg);
-        bool callbackAttitudeRateCmd(const mrs_msgs::HwApiAttitudeRateCmd::ConstPtr msg);
-        bool callbackAttitudeCmd(const mrs_msgs::HwApiAttitudeCmd::ConstPtr msg);
-        bool callbackAccelerationHdgRateCmd(const mrs_msgs::HwApiAccelerationHdgRateCmd::ConstPtr msg);
-        bool callbackAccelerationHdgCmd(const mrs_msgs::HwApiAccelerationHdgCmd::ConstPtr msg);
-        bool callbackVelocityHdgRateCmd(const mrs_msgs::HwApiVelocityHdgRateCmd::ConstPtr msg);
-        bool callbackVelocityHdgCmd(const mrs_msgs::HwApiVelocityHdgCmd::ConstPtr msg);
-        bool callbackPositionCmd(const mrs_msgs::HwApiPositionCmd::ConstPtr msg);
-        void callbackTrackerCmd(const mrs_msgs::TrackerCommand::ConstPtr msg);
+        bool callbackActuatorCmd(const mrs_msgs::msg::HwApiActuatorCmd::ConstPtr msg);
+        bool callbackControlGroupCmd(const mrs_msgs::msg::HwApiControlGroupCmd::ConstPtr msg);
+        bool callbackAttitudeRateCmd(const mrs_msgs::msg::HwApiAttitudeRateCmd::ConstPtr msg);
+        bool callbackAttitudeCmd(const mrs_msgs::msg::HwApiAttitudeCmd::ConstPtr msg);
+        bool callbackAccelerationHdgRateCmd(const mrs_msgs::msg::HwApiAccelerationHdgRateCmd::ConstPtr msg);
+        bool callbackAccelerationHdgCmd(const mrs_msgs::msg::HwApiAccelerationHdgCmd::ConstPtr msg);
+        bool callbackVelocityHdgRateCmd(const mrs_msgs::msg::HwApiVelocityHdgRateCmd::ConstPtr msg);
+        bool callbackVelocityHdgCmd(const mrs_msgs::msg::HwApiVelocityHdgCmd::ConstPtr msg);
+        bool callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstPtr msg);
+        void callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstPtr msg);
         // | -------------------- service callbacks ------------------- |
 
         std::tuple<bool, std::string> callbackArming(const bool &request);
@@ -493,11 +503,19 @@ namespace mrs_uav_fcu_api
     private:
         bool is_initialized_ = false;
 
+        rclcpp::Node::SharedPtr node_;
+        rclcpp::Clock::SharedPtr clock_;
+
         std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers_;
+
+        // | ---------------------- subscribers ----------------------- |
+
+        //mrs_lib::SubscriberHandler<> sh_ground_truth_;
+        //mrs_lib::SubscriberHandler<> sh_rtk_;
 
         // | ----------------------- parameters ----------------------- |
 
-        mrs_msgs::HwApiCapabilities _capabilities_;
+        mrs_msgs::msg::HwApiCapabilities _capabilities_;
 
         std::string _uav_name_;
         std::string _body_frame_name_;
@@ -509,10 +527,11 @@ namespace mrs_uav_fcu_api
 
         std::shared_ptr<SerialApi> ser_;
         hitl_binder hitl_binder_;
-        // output methods for rtk
-        void publishGroundTruth(const nav_msgs::Odometry::ConstPtr msg);
 
-        void publishRTK(const mrs_modules_msgs::Bestpos::ConstPtr msg);
+        // output methods for rtk
+        void publishGroundTruth(const nav_msgs::msg::Odometry::ConstPtr msg);
+
+        void publishRTK(const std::shared_ptr<mrs_modules_msgs__msg__Bestpos> msg);
 
         double RCChannelToRange(const double &rc_value);
 
@@ -522,7 +541,7 @@ namespace mrs_uav_fcu_api
         void publishAttitude(const umsg_estimation_attitude_t &msg);
         void publishOdometryLocal(const umsg_estimation_position_t &msg);
         void publishNavsatFix(umsg_sensors_gps_t &msg);
-        void publishDistanceSensor(const sensor_msgs::Range::ConstPtr msg); // not yet implemented
+        void publishDistanceSensor(const sensor_msgs::msg::Range::ConstPtr msg); // not yet implemented
         void publishImu(const umsg_sensors_imu_t &msg);
         void publishMagnetometer(const umsg_sensors_mag_t &msg);
         void publishMagneticField(const umsg_sensors_mag_t &msg);
@@ -549,16 +568,14 @@ namespace mrs_uav_fcu_api
 
     //}
 
-    // --------------------------------------------------------------
-    // |                   controller's interface                   |
-    // --------------------------------------------------------------
-
     /* initialize() //{ */
 
-    void MrsUavFcuApi::initialize(const ros::NodeHandle &parent_node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers)
+    void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &parent_node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers)
     {
+        node_  = parent_node;
+        clock_ = node_->get_clock();
 
-        ros::NodeHandle nh_(parent_node);
+        cbgrp_subs_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
         common_handlers_ = common_handlers;
 
@@ -570,7 +587,7 @@ namespace mrs_uav_fcu_api
 
         // | ------------------- loading parameters ------------------- |
 
-        mrs_lib::ParamLoader param_loader(nh_, "MrsUavHwApi");
+        mrs_lib::ParamLoader param_loader(node_, "MrsUavHwApi");
 
         // ask what this does
         param_loader.loadParam("comms_timeout", _comms_timeout_);
@@ -601,27 +618,26 @@ namespace mrs_uav_fcu_api
 
         if (!param_loader.loadedSuccessfully())
         {
-            ROS_ERROR("[MrsUavFcuApi]: Could not load all parameters!");
-            ros::shutdown();
+            RCLCPP_ERROR(node_->get_logger(), "[MrsUavFcuApi]: Could not load all parameters!");
+            rclcpp::shutdown();
         }
 
         // | ----------------------- subscribers ---------------------- |
 
-        mrs_lib::SubscribeHandlerOptions shopts;
-        shopts.nh = nh_;
-        shopts.node_name = "MrsHwFcuApi";
-        shopts.no_message_timeout = mrs_lib::no_timeout;
-        shopts.threadsafe = true;
-        shopts.autostart = true;
-        shopts.queue_size = 10;
-        shopts.transport_hints = ros::TransportHints().tcpNoDelay();
+        mrs_lib::SubscriberHandlerOptions shopts;
+
+        shopts.node                                = node_;
+        shopts.node_name                           = "MrsHwFcuApi";
+        shopts.no_message_timeout                  = mrs_lib::no_timeout;
+        shopts.threadsafe                          = true;
+        shopts.autostart                           = true;
+        shopts.subscription_options.callback_group = cbgrp_subs_;
 
         if (_simulation_)
         {
             // sh_ground_truth_ = mrs_lib::SubscribeHandler<nav_msgs::Odometry>(shopts, "ground_truth_in", &MrsUavFcuApi::callbackGroundTruth, this);
         }
-
-        if (!_simulation_)
+        else /*!_simulation_*/
         {
             // sh_rtk_ = mrs_lib::SubscribeHandler<mrs_modules_msgs::Bestpos>(shopts, "rtk_in", &MrsUavFcuApi::callbackRTK, this);
         }
@@ -630,21 +646,24 @@ namespace mrs_uav_fcu_api
 
         // | ----------------------- finish init ---------------------- |
 
+        /*Init Serial api communication*/
         std::string serial_port;
-        param_loader.loadParam("serial_port", serial_port);
         int baud_rate;
-
+        param_loader.loadParam("serial_port", serial_port);
         param_loader.loadParam("baud_rate", baud_rate);
 
-        ser_ = std::make_shared<SerialApi>(serial_port, baud_rate);
-
+        ser_ = std::make_shared<SerialApi>(node_, serial_port, baud_rate);
         ser_->startReceiver();
-        ser_->startSyncTimer(nh_);
+        ser_->startSyncTimer();
+
+        /*Init HITL binder*/
         if (_simulation_)
         {
-            hitl_binder_.Init(parent_node, ser_);
+            hitl_binder_.Init(node_, ser_);
         }
-        ROS_INFO("[MrsUavFcuApi]: initialized");
+
+        RCLCPP_INFO(node_->get_logger(),"[MrsUavFcuApi]: initialized");
+
         parser_thread_ = std::thread([this]
                                      { this->messageParser(); });
         is_initialized_ = true;
@@ -654,12 +673,12 @@ namespace mrs_uav_fcu_api
 
     /* getStatus() //{ */
 
-    mrs_msgs::HwApiStatus MrsUavFcuApi::getStatus()
+    mrs_msgs::msg::HwApiStatus MrsUavFcuApi::getStatus()
     {
 
-        mrs_msgs::HwApiStatus status;
+        mrs_msgs::msg::HwApiStatus status;
 
-        status.stamp = ros::Time::now();
+        status.stamp = clock_->now();
         status.armed = armed_;
         status.offboard = offboard_;
         status.connected = connected_;
@@ -672,10 +691,9 @@ namespace mrs_uav_fcu_api
 
     /* getCapabilities() //{ */
 
-    mrs_msgs::HwApiCapabilities MrsUavFcuApi::getCapabilities()
+    mrs_msgs::msg::HwApiCapabilities MrsUavFcuApi::getCapabilities()
     {
-
-        _capabilities_.stamp = ros::Time::now();
+        _capabilities_.stamp = clock_->now();
 
         return _capabilities_;
     }
@@ -684,14 +702,14 @@ namespace mrs_uav_fcu_api
 
     /* callbackAttitudeRateCmd() //{ */
 
-    bool MrsUavFcuApi::callbackAttitudeRateCmd(const mrs_msgs::HwApiAttitudeRateCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackAttitudeRateCmd(const mrs_msgs::msg::HwApiAttitudeRateCmd::ConstPtr msg)
     {
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting attitude rate cmd");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting attitude rate cmd");
 
         if (!_capabilities_.accepts_attitude_rate_cmd)
         {
-            ROS_ERROR_THROTTLE(1.0, "[MrsUavFcuApi]: attitude rate input is not enabled in the config file");
+            RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1.0, "[MrsUavFcuApi]: attitude rate input is not enabled in the config file");
             return false;
         }
 
@@ -717,14 +735,14 @@ namespace mrs_uav_fcu_api
 
     /* callbackAttitudeCmd() //{ */
 
-    bool MrsUavFcuApi::callbackAttitudeCmd(const mrs_msgs::HwApiAttitudeCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackAttitudeCmd(const mrs_msgs::msg::HwApiAttitudeCmd::ConstPtr msg)
     {
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting attitude cmd");
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[MrsUavFcuApi]: getting attitude cmd");
 
         if (!_capabilities_.accepts_attitude_cmd)
         {
-            ROS_ERROR_THROTTLE(1.0, "[MrsUavFcuApi]: attitude input is not enabled in the config file");
+            RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1.0, "[MrsUavFcuApi]: attitude input is not enabled in the config file");
             return false;
         }
         umsg_MessageToTransfer out;
@@ -760,7 +778,7 @@ namespace mrs_uav_fcu_api
         {
 
             ss << "can not arm by service when not in simulation! You should arm the drone by the RC controller only!";
-            ROS_ERROR_STREAM_THROTTLE(1.0, "[Px4Api]: " << ss.str());
+            RCLCPP_ERROR_STREAM_THROTTLE( node_->get_logger(), *clock_, 1.0, "[Px4Api]: " << ss.str());
 
             return {false, "ss.str()"};
         }
@@ -771,13 +789,13 @@ namespace mrs_uav_fcu_api
         msg.s.msg_class = UMSG_STATE;
         msg.s.msg_type = STATE_STATECHANGEREQUEST;
         msg.s.state.stateChangeRequest.requestedState = request ? UAV_FLYING : UAV_DISARMED;
-        msg.s.state.stateChangeRequest.timestamp = ser_->RosToFcu(ros::Time::now());
+        msg.s.state.stateChangeRequest.timestamp = ser_->RosToFcu(clock_->now());
         msg.s.len = UMSG_HEADER_SIZE + sizeof(umsg_state_stateChangeRequest_t) + 1;
         msg.raw[msg.s.len - 1] = umsg_calcCRC(msg.raw, msg.s.len - 1);
         ser_->sendPacket(msg);
 
         // TODO maybe there is a confirmation mechanism needed?
-        ROS_INFO("[FcuApi]: calling for %s", request ? "arming" : "disarming");
+        RCLCPP_INFO(node_->get_logger(),"[FcuApi]: calling for %s", request ? "arming" : "disarming");
 
         return {true, "ss.str()"};
     }
@@ -794,13 +812,13 @@ namespace mrs_uav_fcu_api
         msg.s.msg_class = UMSG_STATE;
         msg.s.msg_type = STATE_MODECHANGEREQUEST;
         msg.s.state.modeChangeRequest.requestedMode = OFFBOARD;
-        msg.s.state.modeChangeRequest.timestamp = ser_->RosToFcu(ros::Time::now());
+        msg.s.state.modeChangeRequest.timestamp = ser_->RosToFcu(clock_->now());
         msg.s.len = UMSG_HEADER_SIZE + sizeof(umsg_state_modeChangeRequest_t) + 1;
         msg.raw[msg.s.len - 1] = umsg_calcCRC(msg.raw, msg.s.len - 1);
         ser_->sendPacket(msg);
 
         // TODO maybe there is a confirmation mechanism needed?
-        ROS_INFO("[FcuApi]: calling for offboard mode");
+        RCLCPP_INFO(node_->get_logger(),"[FcuApi]: calling for offboard mode");
 
         return {true, "ss.str()"};
     }
@@ -885,7 +903,7 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting Mavros state");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting Mavros state");
 
         {
             std::scoped_lock lock(mutex_status_);
@@ -908,7 +926,7 @@ namespace mrs_uav_fcu_api
         }
         // | ----------------- publish the diagnostics ---------------- |
 
-        mrs_msgs::HwApiStatus status;
+        mrs_msgs::msg::HwApiStatus status;
 
         {
             std::scoped_lock lock(mutex_status_);
@@ -935,18 +953,18 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting Mavros's local odometry");
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[MrsUavFcuApi]: getting Mavros's local odometry");
 
         // | -------------------- publish position -------------------- |
 
         if (_capabilities_.produces_position)
         {
 
-            geometry_msgs::PointStamped position;
+            geometry_msgs::msg::PointStamped position;
 
             position.header.stamp = ser_->FcuToRos(msg.timestamp);
             position.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
-            geometry_msgs::Point p;
+            geometry_msgs::msg::Point p;
             p.x = msg.position[0];
             p.y = msg.position[1];
             p.z = msg.position[2];
@@ -962,7 +980,7 @@ namespace mrs_uav_fcu_api
         if (_capabilities_.produces_velocity)
         {
 
-            geometry_msgs::Vector3Stamped velocity;
+            geometry_msgs::msg::Vector3Stamped velocity;
 
             velocity.header.stamp = ser_->FcuToRos(msg.timestamp);
             //  TODO FIX : you have to
@@ -981,7 +999,7 @@ namespace mrs_uav_fcu_api
 
         if (_capabilities_.produces_odometry)
         {
-            ROS_ERROR_ONCE("[ODOMETRY] not yet implemented");
+            RCLCPP_ERROR_ONCE(node_->get_logger(),"[ODOMETRY] not yet implemented");
             // common_handlers_->publishers.publishOdometry(odom);
         }
     }
@@ -997,18 +1015,18 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting NavSat fix");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting NavSat fix");
 
         if (_capabilities_.produces_gnss)
         {
-            sensor_msgs::NavSatFix fixmsg;
+            sensor_msgs::msg::NavSatFix fixmsg;
             fixmsg.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
             fixmsg.header.stamp = ser_->FcuToRos(msg.timestamp);
             fixmsg.altitude = msg.hMSL;
             fixmsg.latitude = msg.lat;
             fixmsg.longitude = msg.lon;
-            fixmsg.position_covariance_type = sensor_msgs::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
-            fixmsg.status.status = (msg.fixType == FIX_3D) ? sensor_msgs::NavSatStatus::STATUS_FIX : sensor_msgs::NavSatStatus::STATUS_NO_FIX;
+            fixmsg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
+            fixmsg.status.status = (msg.fixType == FIX_3D) ? sensor_msgs::msg::NavSatStatus::STATUS_FIX : sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
             common_handlers_->publishers.publishGNSS(fixmsg);
         }
     }
@@ -1017,7 +1035,7 @@ namespace mrs_uav_fcu_api
 
     /* callbackDistanceSensor() //{ */
 
-    void MrsUavFcuApi::publishDistanceSensor(const sensor_msgs::Range::ConstPtr msg)
+    void MrsUavFcuApi::publishDistanceSensor(const sensor_msgs::msg::Range::ConstPtr msg)
     {
 
         if (!is_initialized_)
@@ -1025,11 +1043,10 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting distnace sensor");
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[MrsUavFcuApi]: getting distnace sensor");
 
         if (_capabilities_.produces_distance_sensor)
         {
-
             common_handlers_->publishers.publishDistanceSensor(*msg);
         }
     }
@@ -1046,12 +1063,11 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting IMU");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting IMU");
 
         if (_capabilities_.produces_imu)
         {
-
-            sensor_msgs::Imu imu;
+            sensor_msgs::msg::Imu imu;
             imu.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
 
             imu.header.stamp = ser_->FcuToRos(msg.timestamp);
@@ -1077,11 +1093,11 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting magnetometer heading");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting magnetometer heading");
 
         if (_capabilities_.produces_magnetometer_heading)
         {
-            mrs_msgs::Float64Stamped mag_out;
+            mrs_msgs::msg::Float64Stamped mag_out;
             mag_out.header.stamp = ser_->FcuToRos(msg.timestamp);
             mag_out.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
             mag_out.value = 180 / M_PI * std::atan2(msg.mag[1], msg.mag[0]);
@@ -1102,11 +1118,11 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting magnetic field");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting magnetic field");
 
         if (_capabilities_.produces_magnetic_field)
         {
-            sensor_msgs::MagneticField mag;
+            sensor_msgs::msg::MagneticField mag;
             mag.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
             mag.header.stamp = ser_->FcuToRos(msg.timestamp);
             mag.magnetic_field.x = static_cast<double>(msg.mag[0]);
@@ -1128,12 +1144,12 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting RC");
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[MrsUavFcuApi]: getting RC");
 
         if (_capabilities_.produces_rc_channels)
         {
 
-            mrs_msgs::HwApiRcChannels rc_out;
+            mrs_msgs::msg::HwApiRcChannels rc_out;
 
             rc_out.stamp = ser_->FcuToRos(msg.timestamp);
 
@@ -1158,12 +1174,11 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting Altitude");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting Altitude");
 
         if (_capabilities_.produces_altitude)
         {
-
-            mrs_msgs::HwApiAltitude altitude_out;
+            mrs_msgs::msg::HwApiAltitude altitude_out;
             altitude_out.stamp = ser_->FcuToRos(msg.timestamp);
             altitude_out.amsl = static_cast<double>(msg.altitude);
 
@@ -1183,12 +1198,12 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting Gps Status Raw");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting Gps Status Raw");
 
         if (_capabilities_.produces_gnss_status)
         {
 
-            mrs_msgs::GpsInfo gps_info_out;
+            mrs_msgs::msg::GpsInfo gps_info_out;
 
             gps_info_out.stamp = ser_->FcuToRos(msg.timestamp); // [GPS_FIX_TYPE] GPS fix type
             gps_info_out.fix_type = msg.fixType;                // [GPS_FIX_TYPE] GPS fix type
@@ -1226,13 +1241,13 @@ namespace mrs_uav_fcu_api
         if (_capabilities_.produces_orientation)
         {
 
-            geometry_msgs::QuaternionStamped orientation;
+            geometry_msgs::msg::QuaternionStamped orientation;
 
             orientation.header.stamp = ser_->FcuToRos(msg.timestamp);
             orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
 
             Eigen::Quaternion<float> q_eig = Eigen::Quaternion<float>(msg.w, msg.x, msg.y, msg.z).inverse();
-            geometry_msgs::Quaternion q;
+            geometry_msgs::msg::Quaternion q;
             q.x = static_cast<double>(q_eig.x());
             q.y = static_cast<double>(q_eig.y());
             q.z = static_cast<double>(q_eig.z());
@@ -1245,11 +1260,11 @@ namespace mrs_uav_fcu_api
         if (_capabilities_.produces_angular_velocity)
         {
 
-            geometry_msgs::Vector3Stamped angular_velocity;
+            geometry_msgs::msg::Vector3Stamped angular_velocity;
 
             angular_velocity.header.stamp = ser_->FcuToRos(msg.timestamp);
             angular_velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
-            geometry_msgs::Vector3 v;
+            geometry_msgs::msg::Vector3 v;
             v.x = static_cast<double>(msg.att_rate[0]);
             v.y = static_cast<double>(msg.att_rate[1]);
             v.z = static_cast<double>(msg.att_rate[2]);
@@ -1269,12 +1284,12 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting battery");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting battery");
 
         if (_capabilities_.produces_battery_state)
         {
 
-            ROS_ERROR("[pub battery] NOT IMPLEMENTED");
+            RCLCPP_ERROR(node_->get_logger(),"[pub battery] NOT IMPLEMENTED");
             // common_handlers_->publishers.publishBatteryState(*msg);
         }
     }
@@ -1283,14 +1298,14 @@ namespace mrs_uav_fcu_api
 
     /* callbackGroundTruth() //{ */
 
-    void MrsUavFcuApi::publishGroundTruth(const nav_msgs::Odometry::ConstPtr msg)
+    void MrsUavFcuApi::publishGroundTruth(const nav_msgs::msg::Odometry::ConstPtr msg)
     {
         if (!ser_->isSynced())
         {
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting ground truth");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting ground truth");
 
         auto odom = msg;
 
@@ -1299,13 +1314,13 @@ namespace mrs_uav_fcu_api
         if (_capabilities_.produces_ground_truth)
         {
 
-            nav_msgs::Odometry gt = *msg;
+            nav_msgs::msg::Odometry gt = *msg;
 
             // if frame_id is "/world", "world", "/map" or "map" gazebo reports velocitites in global world frame so we need to transform them to body frame
             if (msg->header.frame_id == "/world" || msg->header.frame_id == "world" || msg->header.frame_id == "/map" || msg->header.frame_id == "map")
             {
 
-                ROS_INFO_ONCE("[MrsUavFcuApi]: transforming Gazebo ground truth velocities from world to body frame");
+                RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: transforming Gazebo ground truth velocities from world to body frame");
 
                 Eigen::Matrix3d R = mrs_lib::AttitudeConverter(msg->pose.pose.orientation);
 
@@ -1368,47 +1383,47 @@ namespace mrs_uav_fcu_api
 
     /* callbackRTK() //{ */
 
-    void MrsUavFcuApi::publishRTK(const mrs_modules_msgs::Bestpos::ConstPtr msg)
+    void MrsUavFcuApi::publishRTK(const std::shared_ptr<mrs_modules_msgs__msg__Bestpos> msg)
     {
         if (!ser_->isSynced())
         {
             return;
         }
 
-        ROS_INFO_ONCE("[MrsUavFcuApi]: getting rtk");
+        RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting rtk");
 
-        mrs_msgs::RtkGps rtk_msg_out;
+        mrs_msgs::msg::RtkGps rtk_msg_out;
 
         rtk_msg_out.gps.latitude = msg->latitude;
         rtk_msg_out.gps.longitude = msg->longitude;
         rtk_msg_out.gps.altitude = msg->height;
 
-        rtk_msg_out.header.stamp = ros::Time::now();
+        rtk_msg_out.header.stamp = clock_->now();
         rtk_msg_out.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
 
-        if (msg->position_type == "L1_INT")
+        if (std::string(msg->position_type.data) == "L1_INT")
         {
-            rtk_msg_out.status.status = sensor_msgs::NavSatStatus::STATUS_GBAS_FIX;
+            rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.RTK_FIX;
         }
-        else if (msg->position_type == "L1_FLOAT")
+        else if (std::string(msg->position_type.data) == "L1_FLOAT")
         {
-            rtk_msg_out.status.status = sensor_msgs::NavSatStatus::STATUS_GBAS_FIX;
+            rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.RTK_FLOAT;
         }
-        else if (msg->position_type == "PSRDIFF")
+        else if (std::string(msg->position_type.data) == "PSRDIFF")
         {
-            rtk_msg_out.status.status = sensor_msgs::NavSatStatus::STATUS_GBAS_FIX;
+            rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.DGPS;
         }
-        else if (msg->position_type == "SINGLE")
+        else if (std::string(msg->position_type.data) == "SINGLE")
         {
-            rtk_msg_out.status.status = sensor_msgs::NavSatStatus::STATUS_GBAS_FIX;
+            rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.SPS;
         }
-        else if (msg->position_type == "NONE")
+        else if (std::string(msg->position_type.data) == "NONE")
         {
-            rtk_msg_out.status.status = sensor_msgs::NavSatStatus::STATUS_NO_FIX;
+            rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.NO_FIX;
         }
 
@@ -1513,7 +1528,7 @@ namespace mrs_uav_fcu_api
     void MrsUavFcuApi::messageParser()
     {
 
-        while (true)
+        while (rclcpp::ok())
         {
             umsg_MessageToTransfer msg = ser_->waitForPacket();
             bool parsed = false;
@@ -1528,42 +1543,42 @@ namespace mrs_uav_fcu_api
 
             if (!parsed)
             {
-                ROS_ERROR("[HWApi] message class %d and type %d could not be parsed", msg.s.msg_class, msg.s.msg_type);
+                RCLCPP_ERROR(node_->get_logger(),"[HWApi] message class %d and type %d could not be parsed", msg.s.msg_class, msg.s.msg_type);
             }
         }
     };
 
     // | ------------------------- methods ------------------------ |
 
-    bool MrsUavFcuApi::callbackActuatorCmd(const mrs_msgs::HwApiActuatorCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackActuatorCmd(const mrs_msgs::msg::HwApiActuatorCmd::ConstPtr msg)
     {
         return false;
     }
-    bool MrsUavFcuApi::callbackControlGroupCmd(const mrs_msgs::HwApiControlGroupCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackControlGroupCmd(const mrs_msgs::msg::HwApiControlGroupCmd::ConstPtr msg)
     {
         return false;
     }
-    bool MrsUavFcuApi::callbackAccelerationHdgRateCmd(const mrs_msgs::HwApiAccelerationHdgRateCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackAccelerationHdgRateCmd(const mrs_msgs::msg::HwApiAccelerationHdgRateCmd::ConstPtr msg)
     {
         return false;
     }
-    bool MrsUavFcuApi::callbackAccelerationHdgCmd(const mrs_msgs::HwApiAccelerationHdgCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackAccelerationHdgCmd(const mrs_msgs::msg::HwApiAccelerationHdgCmd::ConstPtr msg)
     {
         return false;
     }
-    bool MrsUavFcuApi::callbackVelocityHdgRateCmd(const mrs_msgs::HwApiVelocityHdgRateCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackVelocityHdgRateCmd(const mrs_msgs::msg::HwApiVelocityHdgRateCmd::ConstPtr msg)
     {
         return false;
     }
-    bool MrsUavFcuApi::callbackVelocityHdgCmd(const mrs_msgs::HwApiVelocityHdgCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackVelocityHdgCmd(const mrs_msgs::msg::HwApiVelocityHdgCmd::ConstPtr msg)
     {
         return false;
     }
-    bool MrsUavFcuApi::callbackPositionCmd(const mrs_msgs::HwApiPositionCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstPtr msg)
     {
         return false;
     }
-    void MrsUavFcuApi::callbackTrackerCmd(const mrs_msgs::TrackerCommand::ConstPtr msg)
+    void MrsUavFcuApi::callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstPtr msg)
     {
         return;
     }
@@ -1571,5 +1586,5 @@ namespace mrs_uav_fcu_api
 
 } // namespace mrs_uav_px4_api
 
-#include <pluginlib/class_list_macros.h>
+#include <pluginlib/class_list_macros.hpp>
 PLUGINLIB_EXPORT_CLASS(mrs_uav_fcu_api::MrsUavFcuApi, mrs_uav_hw_api::MrsUavHwApi)
