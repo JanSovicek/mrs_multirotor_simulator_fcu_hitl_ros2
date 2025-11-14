@@ -7,34 +7,37 @@
 
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/publisher_handler.h>
-#include <mrs_lib/subscribe_handler.h>
+#include <mrs_lib/subscriber_handler.h>
 #include <mrs_lib/mutex.h>
 #include <mrs_lib/node.h>
 #include <mrs_lib/attitude_converter.h>
 
 #include <mrs_multirotor_simulator/uav_system/uav_system.hpp>
 
-#include <sensor_msgs/Imu.h>
-#include <sensor_msgs/Range.h>
-#include <nav_msgs/Odometry.h>
-#include <mrs_msgs/Float64Srv.h>
-#include <sensor_msgs/MagneticField.h>
+#include <sensor_msgs/sensor_msgs/msg/imu.h>
+#include <sensor_msgs/sensor_msgs/msg/range.h>
+#include <nav_msgs/nav_msgs/msg/odometry.h>
+#include <mrs_msgs/mrs_msgs/srv/float64_srv.h>
+#include <sensor_msgs/sensor_msgs/msg/magnetic_field.h>
 
-#include <mrs_msgs/HwApiActuatorCmd.h>
-#include <mrs_msgs/HwApiControlGroupCmd.h>
-#include <mrs_msgs/HwApiAttitudeRateCmd.h>
-#include <mrs_msgs/HwApiAttitudeCmd.h>
-#include <mrs_msgs/HwApiAccelerationHdgRateCmd.h>
-#include <mrs_msgs/HwApiAccelerationHdgCmd.h>
-#include <mrs_msgs/HwApiVelocityHdgRateCmd.h>
-#include <mrs_msgs/HwApiVelocityHdgCmd.h>
-#include <mrs_msgs/HwApiPositionCmd.h>
-#include <mrs_msgs/TrackerCommand.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_actuator_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_control_group_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_attitude_rate_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_attitude_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_acceleration_hdg_rate_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_acceleration_hdg_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_velocity_hdg_rate_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_velocity_hdg_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/hw_api_position_cmd.h>
+#include <mrs_msgs/mrs_msgs/msg/tracker_command.h>
 
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/publisher_handler.h>
-#include <mrs_lib/subscribe_handler.h>
+#include <mrs_lib/subscriber_handler.h>
 #include <mrs_lib/gps_conversions.h>
+#include <mrs_lib/node.h>
+#include <mrs_lib/scope_timer.h>
+#include <mrs_lib/transform_broadcaster.h>
 
 #include "serial_port.hpp"
 #include "serial_api.hpp"
@@ -42,17 +45,19 @@
 #include <umsg.h>
 #include <umsg_classes.h>
 
+#include <mrs_multirotor_simulator/uav_system_ros.h>
+
 //}
 
 namespace mrs_fcu_hitl_binder
 {
     /* class FcuHiltBinder //{ */
 
-    class FcuHiltBinder : public mrs_lib::Node
+    class FcuHitlBinder : public mrs_lib::Node
     {
 
     public:
-        FcuHitlBinder::FcuHiltBinder(rclcpp::NodeOptions options);
+        FcuHitlBinder(rclcpp::NodeOptions options);
 
     private:
         rclcpp::CallbackGroup::SharedPtr cbgrp_main_;
@@ -76,9 +81,9 @@ namespace mrs_fcu_hitl_binder
 
         // | ------------------------- timers ------------------------- |
 
-        std::thread recvThread_;
-        rclcpp::TimerBase::SharedPtr timer_sync_;
-        void                         timerSync();
+        //std::thread recvThread_;
+        //rclcpp::TimerBase::SharedPtr timer_sync_;
+        //void                         timerSync();
 
         // | ------------------------ rtf check ----------------------- |
 
@@ -87,9 +92,13 @@ namespace mrs_fcu_hitl_binder
 
         // | -------------------------- system ------------------------ |
 
+        std::vector<std::unique_ptr<UavSystemRos>> uavs_;
+
         // | ------------------------- methods ------------------------ |
 
         std::shared_ptr<SerialApi> ser_api_;
+
+        std::shared_ptr<mrs_lib::TransformBroadcaster> tf_broadcaster_;
 
         // | ----------------------- dynamic params ------------------- |
     };
@@ -98,7 +107,7 @@ namespace mrs_fcu_hitl_binder
 
     /* FcuHiltBinder::FcuHiltBinder() //{ */
 
-    FcuHitlBinder::FcuHitlBinder(rclcpp::NodeOptions options) : mrs_lib::Node("fcu_binder")
+    FcuHitlBinder::FcuHitlBinder(rclcpp::NodeOptions options) : mrs_lib::Node("fcu_binder", options)
     {
         this->initialize();
     }
@@ -166,13 +175,13 @@ namespace mrs_fcu_hitl_binder
 
             RCLCPP_INFO(node_->get_logger(), "initializing '%s'", uav_name.c_str());
 
-            UavSystemRos_CommonHandlers_t common_handlers;
+            mrs_multirotor_simulator::UavSystemRos_CommonHandlers_t common_handlers;
 
             common_handlers.node                  = node_;
             common_handlers.uav_name              = uav_name;
             common_handlers.transform_broadcaster = tf_broadcaster_;
 
-            uavs_.push_back(std::make_unique<UavSystemRos>(common_handlers));
+            uavs_.push_back(std::make_unique<mrs_multirotor_simulator::UavSystemRos>(common_handlers));
         }
 
         RCLCPP_INFO(node_->get_logger(), "all uavs initialized");
@@ -209,4 +218,4 @@ namespace mrs_fcu_hitl_binder
 } // namespace fcu_hitl_binder
 
 #include <rclcpp_components/register_node_macro.hpp>
-RCLCPP_COMPONENTS_REGISTER_NODE(mrs_hitl_binders::FcuHitlBinder)
+RCLCPP_COMPONENTS_REGISTER_NODE(mrs_fcu_hitl_binder::FcuHitlBinder)
