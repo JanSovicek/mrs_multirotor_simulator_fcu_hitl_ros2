@@ -35,6 +35,8 @@
 
   <depend>backward_ros</depend>
 
+  <depend>serial</depend>
+
   <export>
     <build_type>ament_cmake</build_type>
   </export>
