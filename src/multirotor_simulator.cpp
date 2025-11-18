@@ -408,6 +408,8 @@ void MultirotorSimulator::handleCollisions(void) {
     MultirotorModel::State       state_1  = uavs_.at(i)->getState();
     MultirotorModel::ModelParams params_1 = uavs_.at(i)->getParams();
 
+    RCLCPP_INFO_ONCE(node_->get_logger(), "[SIMULATOR]: model_param Js: %lf %lf %lf",params_1.J(0,0),params_1.J(1,1),params_1.J(2,2));
+
     nanoflann::RadiusResultSet<double, int> resultSet(3.0, indices_dists);
 
     mat_index.index->findNeighbors(resultSet, &state_1.x(0));
