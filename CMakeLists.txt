@@ -111,7 +111,7 @@ target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu
   uMsgLib
   )
 
-ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsApi
+ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsFcu
   ${DEPENDENCIES}
 )
 
