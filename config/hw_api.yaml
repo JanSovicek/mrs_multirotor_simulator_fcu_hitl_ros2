@@ -1,41 +1,34 @@
-hw_interface_plugin: "mrs_uav_simulator_hw_api_plugin::Api"
+hw_interface_plugin: "mrs_uav_fcu_api::Api"
 
 plugin:
 
-  gnss:
+  comms_timeout: 1.0 #[s]
+
+  simulated_rtk:
     utm_zone: "32T"
     utm_x: 465710.758973
     utm_y: 5249465.43086
     amsl: 340.0
 
-  # determines if offboard can be switched on
-  input_timeout: 1.0 # [s]
-
-  input_mode:
-    actuators:             false
-    control_group:         false
-    attitude_rate:         true
-    attitude:              true
-    acceleration_hdg_rate: false
-    acceleration_hdg:      false
-    velocity_hdg_rate:     false
-    velocity_hdg:          false
-    position:              false
-
-    feedforward: true
+  inputs:
+    control_group: false
+    altitude_rate: true
+    attitude:      true
 
   outputs:
-    distance_sensor:      true
+    distance_sensor:      false
     gnss:                 true
-    rtk:                  true
+    gnss_status:          true
+    rtk:                  false
     imu:                  true
     altitude:             true
     magnetometer_heading: true
+    magnetic_field:       true
     rc_channels:          true
-    battery_state:        true
+    battery_state:        false
     position:             true
     orientation:          true
     velocity:             true
     angular_velocity:     true
-    odometry:             true
-    ground_truth:         true
+    odometry:             false
+    ground_truth:         false

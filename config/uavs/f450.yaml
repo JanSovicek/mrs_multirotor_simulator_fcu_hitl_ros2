@@ -1,7 +1,7 @@
 f450:
 
   n_motors: 4                # [-]
-  mass: 1.7                  # [kg]
+  mass: 2.0                  # [kg]
   arm_length: 0.225          # [m]
   body_height: 0.1           # [m]
   motor_time_constant: 0.03  # [s]
