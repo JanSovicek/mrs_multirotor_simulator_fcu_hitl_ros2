@@ -16,6 +16,8 @@
 
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/range.hpp>
+#include <sensor_msgs/msg/magnetic_field.h>
+
 #include <nav_msgs/msg/odometry.hpp>
 #include <mrs_msgs/msg/float64.hpp>
 #include <mrs_msgs/srv/float64_srv.hpp>
@@ -30,6 +32,9 @@
 #include <mrs_msgs/msg/hw_api_velocity_hdg_cmd.hpp>
 #include <mrs_msgs/msg/hw_api_position_cmd.hpp>
 #include <mrs_msgs/msg/tracker_command.hpp>
+
+#include <random>
+#include "iir_filter.h"
 
 namespace mrs_multirotor_simulator
 {
@@ -105,11 +110,23 @@ private:
   std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs::msg::Imu>>   ph_imu_;
   std::shared_ptr<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>> ph_odom_;
   std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs::msg::Range>> ph_rangefinder_;
+  
+  std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs__msg__MagneticField>> ph_mag_;
+  std::shared_ptr<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>> ph_altitude_;
 
-  void publishOdometry(const MultirotorModel::State& state);
+  std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs::msg::Imu>>            ph_imu_noise_;
+  std::shared_ptr<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>>          ph_odom_noise_;
+  std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs::msg::Range>>          ph_rangefinder_noise_;
+  std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs__msg__MagneticField>>  ph_mag_noise_;
+  std::shared_ptr<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>>          ph_altitude_noise_;
+
   void publishFCUTF(const MultirotorModel::State& state);
-  void publishIMU(const MultirotorModel::State& state);
-  void publishRangefinder(const MultirotorModel::State& state);
+
+  void publishOdometry(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
+  void publishIMU(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
+  void publishRangefinder(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
+  void publishMag(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
+  void publishAltitude(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
 
   void timeoutInput(void);
 
@@ -156,6 +173,35 @@ private:
   // | ------------------------ routines ------------------------ |
 
   void calculateInertia(MultirotorModel::ModelParams& params);
+
+  // | ------------------------- noise parameters ------------------------- |
+    std::mt19937 gen;
+    std::normal_distribution<double> accel_gen_;
+    std::normal_distribution<double> gyro_gen_;
+    std::normal_distribution<double> mag_gen_;
+    std::normal_distribution<double> altitude_gen_;
+    std::normal_distribution<double> position_gen_;
+    std::normal_distribution<double> range_gen_;
+
+    std::vector<mrs_lib::IirFilter> accel_noiseShapers_;
+    std::vector<mrs_lib::IirFilter> gyro_noiseShapers_;
+    std::vector<mrs_lib::IirFilter> mag_noiseShapers_;
+    mrs_lib::IirFilter altitude_noiseShaper_;
+    mrs_lib::IirFilter range_noiseShaper_;
+    std::vector<mrs_lib::IirFilter> position_noiseShapers_;
+
+    rclcpp::Duration imu_delay_;
+    rclcpp::Duration mag_delay_;
+    rclcpp::Duration altitude_delay_;
+    rclcpp::Duration position_delay_;
+    rclcpp::Duration range_delay_;
+
+    rclcpp::Time imu_last_stamp_;
+    rclcpp::Time mag_last_stamp_;
+    rclcpp::Time altitude_last_stamp_;
+    rclcpp::Time position_last_stamp_;
+    rclcpp::Time range_last_stamp_;
+
 };
 
 }  // namespace mrs_multirotor_simulator
