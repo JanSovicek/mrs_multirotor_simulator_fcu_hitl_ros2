@@ -46,6 +46,7 @@
 #include <umsg_classes.h>
 
 #include <mrs_multirotor_simulator/uav_system_ros.h>
+#include <mrs_multirotor_simulator/rate_counter.h>
 
 //}
 
