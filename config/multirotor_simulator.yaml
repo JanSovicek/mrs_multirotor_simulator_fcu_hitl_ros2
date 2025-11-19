@@ -60,13 +60,34 @@ subscribers:
 
 publishers:
 
+  imu:
+    enabled: true
+
   odometry:
     enabled: true
 
   rangefinder:
     enabled: true
 
-  imu:
+  altitude:
+    enabled: true
+
+  magnetometer:
+    enabled: true
+
+  imu_noise:
+    enabled: true
+
+  odometry_noise:
+    enabled: true
+
+  rangefinder_noise:
+    enabled: true
+
+  altitude_noise:
+    enabled: true
+
+  magnetometer_noise:
     enabled: true
 
 frames:

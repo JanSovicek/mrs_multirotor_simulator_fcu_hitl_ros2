@@ -1,4 +1,5 @@
 #include <uav_system_ros.h>
+#include <math.h>
 
 namespace mrs_multirotor_simulator
 {
@@ -173,15 +174,146 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers) 
     rclcpp::shutdown();
   }
 
+  // | ----------------------- noise generation ---------------------- |
+  double bias = 0;
+  double stddev = 0;
+
+  // accel
+  param_loader.loadParam("accel_bias", bias);
+  param_loader.loadParam("accel_stddev", stddev);
+  accel_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  // gyro
+  param_loader.loadParam("gyro_bias", bias);
+  param_loader.loadParam("gyro_stddev", stddev);
+  gyro_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  // altitude
+  param_loader.loadParam("altitude_bias", bias);
+  param_loader.loadParam("altitude_stddev", stddev);
+  altitude_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  // mag
+  param_loader.loadParam("mag_bias", bias);
+  param_loader.loadParam("mag_stddev", stddev);
+  mag_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  // position
+  param_loader.loadParam("pos_bias", bias);
+  param_loader.loadParam("pos_stddev", stddev);
+  position_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  // range
+  param_loader.loadParam("range_bias", bias);
+  param_loader.loadParam("range_stddev", stddev);
+
+  range_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  // load the filters into std vector
+  std::vector<double> b_coeffs;
+  std::vector<double> a_coeffs;
+  a_coeffs.push_back(1);
+
+  // accel
+  const std::string base_accel = "B_accel";
+
+  for (int i = 0; i < 3; i++)
+  {
+      std::string param = base_accel + std::to_string(i);
+      param_loader.loadParam(param, b_coeffs);
+      accel_noiseShapers_.push_back(mrs_lib::IirFilter(a_coeffs, b_coeffs));
+  }
+
+  // gyro
+  const std::string base_gyro = "B_gyro";
+
+  for (int i = 0; i < 3; i++)
+  {
+      std::string param = base_gyro + std::to_string(i);
+      param_loader.loadParam(param, b_coeffs);
+      gyro_noiseShapers_.push_back(mrs_lib::IirFilter(a_coeffs, b_coeffs));
+  }
+
+  // altitude
+  param_loader.loadParam("B_altitude", b_coeffs);
+  altitude_noiseShaper_ = mrs_lib::IirFilter(a_coeffs, b_coeffs);
+
+  // mag
+  const std::string base_mag = "B_mag";
+
+  for (int i = 0; i < 3; i++)
+  {
+      std::string param = base_mag + std::to_string(i);
+      param_loader.loadParam(param, b_coeffs);
+      mag_noiseShapers_.push_back(mrs_lib::IirFilter(a_coeffs, b_coeffs));
+  }
+
+  // position
+  const std::string base_pos = "B_position";
+
+  for (int i = 0; i < 3; i++)
+  {
+      std::string param = base_pos + std::to_string(i);
+      param_loader.loadParam(param, b_coeffs);
+      position_noiseShapers_.push_back(mrs_lib::IirFilter(a_coeffs, b_coeffs));
+  }
+
+  // range
+  param_loader.loadParam("B_range", b_coeffs);
+  range_noiseShaper_ = mrs_lib::IirFilter(a_coeffs, b_coeffs);
+
+  // | ----------------------- load the rates for publishing ----------------------- |
+
+  double frequency = 0;
+
+  param_loader.loadParam("imu_rate", frequency);
+  imu_delay_.from_nanoseconds(static_cast<int64_t>(1e9 / frequency));
+
+  param_loader.loadParam("mag_rate", frequency);
+  mag_delay_.from_nanoseconds(static_cast<int64_t>(1e9 / frequency));
+
+  param_loader.loadParam("altitude_rate", frequency);
+  altitude_delay_.from_nanoseconds(static_cast<int64_t>(1e9 / frequency));
+
+  param_loader.loadParam("position_rate", frequency);
+  position_delay_.from_nanoseconds(static_cast<int64_t>(1e9 / frequency));
+
+  param_loader.loadParam("range_rate", frequency);
+  range_delay_.from_nanoseconds(static_cast<int64_t>(1e9 / frequency));
+
+  if (!param_loader.loadedSuccessfully())
+  {
+      RCLCPP_ERROR(node_->get_logger(), "[%s]: failed to load all parameters", _uav_name_.c_str());
+      rclcpp::shutdown();
+  }
+
   // | ----------------------- publishers ----------------------- |
 
   bool pub_imu_enabled;
   bool pub_odom_enabled;
   bool pub_rangefinder_enabled;
+  bool pub_altitude_enabled;
+  bool pub_mag_enabled;
+
+  bool pub_imu_noise_enabled;
+  bool pub_odom_noise_enabled;
+  bool pub_rangefinder_noise_enabled;
+  bool pub_altitude_noise_enabled;
+  bool pub_mag_noise_enabled;
 
   param_loader.loadParam("publishers/imu/enabled", pub_imu_enabled);
-  param_loader.loadParam("publishers/rangefinder/enabled", pub_rangefinder_enabled);
   param_loader.loadParam("publishers/odometry/enabled", pub_odom_enabled);
+  param_loader.loadParam("publishers/rangefinder/enabled", pub_rangefinder_enabled);
+  param_loader.loadParam("publishers/altitude/enabled", pub_altitude_enabled);
+  param_loader.loadParam("publishers/magnetometer/enabled", pub_mag_enabled);
+
+  param_loader.loadParam("publishers/imu_noise/enabled", pub_imu_noise_enabled);
+  param_loader.loadParam("publishers/odom_noise/enabled", pub_odom_noise_enabled);
+  param_loader.loadParam("publishers/rangefinder_noise/enabled", pub_imu_noise_enabled);
+  param_loader.loadParam("publishers/altitude_noise/enabled", pub_altitude_noise_enabled);
+  param_loader.loadParam("publishers/magnetometer_noise/enabled", pub_mag_noise_enabled);
+
+  /*Sensor publishers*/
 
   if (pub_imu_enabled) {
     ph_imu_ = std::make_shared<mrs_lib::PublisherHandler<sensor_msgs::msg::Imu>>(node_, "~/" + _uav_name_ + "/imu");
@@ -193,6 +325,36 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers) 
 
   if (pub_rangefinder_enabled) {
     ph_rangefinder_ = std::make_shared<mrs_lib::PublisherHandler<sensor_msgs::msg::Range>>(node_, "~/" + _uav_name_ + "/rangefinder");
+  }
+
+  if (pub_altitude_enabled) {
+    ph_altitude_ = std::make_shared<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>>(node_, "~/" + _uav_name_ + "/altitude");
+  }
+
+  if (pub_mag_enabled) {
+    ph_mag_ = std::make_shared<mrs_lib::PublisherHandler<sensor_msgs__msg__MagneticField>>(node_, "~/" + _uav_name_ + "/magnetometer");
+  }
+
+  /*Sensor noise publishers*/
+
+  if (pub_imu_noise_enabled) {
+    ph_imu_noise_ = std::make_shared<mrs_lib::PublisherHandler<sensor_msgs::msg::Imu>>(node_, "~/" + _uav_name_ + "/imu_noise");
+  }
+
+  if (pub_odom_noise_enabled) {
+    ph_odom_noise_ = std::make_shared<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>>(node_, "~/" + _uav_name_ + "/odom_noise");
+  }
+
+  if (pub_rangefinder_noise_enabled) {
+    ph_rangefinder_noise_ = std::make_shared<mrs_lib::PublisherHandler<sensor_msgs::msg::Range>>(node_, "~/" + _uav_name_ + "/rangefinder_noise");
+  }
+
+  if (pub_altitude_enabled) {
+    ph_altitude_noise_ = std::make_shared<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>>(node_, "~/" + _uav_name_ + "/altitude_noise");
+  }
+
+  if (pub_mag_enabled) {
+    ph_mag_noise_ = std::make_shared<mrs_lib::PublisherHandler<sensor_msgs__msg__MagneticField>>(node_, "~/" + _uav_name_ + "/magnetometer_noise");
   }
 
   // | ----------------------- subscribers ---------------------- |
@@ -359,11 +521,21 @@ void UavSystemRos::makeStep(const double dt, const double time_stamp) {
 
   publishFCUTF(state);
 
-  publishOdometry(state);
+  // position
+  publishOdometry(state, sim_time);
 
-  publishIMU(state);
+  // imu
+  publishIMU(state, sim_time);
 
-  publishRangefinder(state);
+  // rangefinder
+  publishRangefinder(state, sim_time);
+
+  // mag
+  publishMag(state, sim_time);
+
+  // altimeter
+  publishAltitude(state, sim_time);
+
 }
 
 //}
@@ -423,7 +595,7 @@ void UavSystemRos::applyForce(const Eigen::Vector3d &force) {
 
 /* publishOdometry() //{ */
 
-void UavSystemRos::publishOdometry(const MultirotorModel::State &state) {
+void UavSystemRos::publishOdometry(const MultirotorModel::State &state, const rclcpp::Time &sim_time) {
 
   if (!ph_odom_) {
     return;
@@ -452,6 +624,17 @@ void UavSystemRos::publishOdometry(const MultirotorModel::State &state) {
   odom.twist.twist.angular.z = state.omega(2);
 
   ph_odom_->publish(odom);
+
+  // add the noise
+  if (sim_time - position_last_stamp_ >= position_delay_)
+  {
+      odom.pose.pose.position.x += position_noiseShapers_.at(0).iterate(position_gen_(gen));
+      odom.pose.pose.position.y += position_noiseShapers_.at(1).iterate(position_gen_(gen));
+      odom.pose.pose.position.z += position_noiseShapers_.at(2).iterate(position_gen_(gen));
+
+      ph_odom_noise_.publish(odom);
+      position_last_stamp_ = sim_time;
+  }
 }
 
 //}
@@ -482,7 +665,7 @@ void UavSystemRos::publishFCUTF(const MultirotorModel::State &state) {
 
 /* publishIMU() //{ */
 
-void UavSystemRos::publishIMU(const MultirotorModel::State &state) {
+void UavSystemRos::publishIMU(const MultirotorModel::State &state, const rclcpp::Time &sim_time) {
 
   if (!ph_imu_) {
     return;
@@ -506,13 +689,29 @@ void UavSystemRos::publishIMU(const MultirotorModel::State &state) {
   imu.orientation = mrs_lib::AttitudeConverter(state.R);
 
   ph_imu_->publish(imu);
+
+  // add the noise
+  if (sim_time - imu_last_stamp_ >= imu_delay_)
+  {
+      imu_last_stamp_ = sim_time;
+      
+      imu.angular_velocity.x += gyro_noiseShapers_.at(0).iterate(gyro_gen_(gen));
+      imu.angular_velocity.y += gyro_noiseShapers_.at(1).iterate(gyro_gen_(gen));
+      imu.angular_velocity.z += gyro_noiseShapers_.at(2).iterate(gyro_gen_(gen));
+
+      imu.linear_acceleration.x += accel_noiseShapers_.at(0).iterate(accel_gen_(gen));
+      imu.linear_acceleration.y += accel_noiseShapers_.at(1).iterate(accel_gen_(gen));
+      imu.linear_acceleration.z += accel_noiseShapers_.at(2).iterate(accel_gen_(gen));
+
+      ph_imu_noise_.publish(imu);
+  }
 }
 
 //}
 
 /* publishRangefinder() //{ */
 
-void UavSystemRos::publishRangefinder(const MultirotorModel::State &state) {
+void UavSystemRos::publishRangefinder(const MultirotorModel::State &state, const rclcpp::Time &sim_time) {
 
   if (!ph_rangefinder_) {
     return;
@@ -550,6 +749,14 @@ void UavSystemRos::publishRangefinder(const MultirotorModel::State &state) {
 
   ph_rangefinder_->publish(range);
 
+  // add the noise
+  if (sim_time - range_last_stamp_ >= range_delay_)
+  {
+      range.range += range_noiseShaper_.iterate(range_gen_(gen));
+      ph_rangefinder_noise_.publish(range);
+      range_last_stamp_ = sim_time;
+  }
+
   if (_publish_rangefinder_tf_) {
 
     geometry_msgs::msg::TransformStamped tf;
@@ -566,6 +773,72 @@ void UavSystemRos::publishRangefinder(const MultirotorModel::State &state) {
 
     tf_broadcaster_->sendTransform(tf);
   }
+}
+
+//}
+
+/* publishAltitude() //{ */
+
+void UavSystemRos::publishAltitude(const MultirotorModel::State &state, const rclcpp::Time &sim_time)
+{
+
+    nav_msgs::Odometry odom;
+
+    odom.header.stamp = sim_time;
+    odom.header.frame_id = _frame_world_;
+    odom.child_frame_id = _frame_fcu_;
+
+    odom.pose.pose.orientation = mrs_lib::AttitudeConverter(state.R);
+
+    odom.pose.pose.position.x = 0;
+    odom.pose.pose.position.y = 0;
+    odom.pose.pose.position.z = state.x(2);
+
+    ph_altitude_.publish(odom);
+
+    // add the noise
+    if (sim_time - altitude_last_stamp_ >= altitude_delay_)
+    {
+        odom.pose.pose.position.z += altitude_noiseShaper_.iterate(altitude_gen_(gen));
+
+        ph_altitude_noise_.publish(odom);
+        altitude_last_stamp_ = sim_time;
+    }
+}
+
+//}
+
+/* publishMag() //{ */
+
+void UavSystemRos::publishMag(const MultirotorModel::State &state, const rclcpp::Time &sim_time)
+{
+    // TODO implement this - SOVICJAN - this comment could be deleted
+
+    sensor_msgs::MagneticField mag;
+
+    mag.header.stamp = sim_time;
+    mag.header.frame_id = _frame_fcu_;
+
+    Eigen::Vector3d vec_north(0, 1, 0); // vector pointing to north in ENU frame
+    Eigen::Vector3d field = state.R.inverse() * vec_north;
+    mag.magnetic_field.x = field.x();
+    mag.magnetic_field.y = field.y();
+    mag.magnetic_field.z = field.z();
+
+    ph_mag_.publish(mag);
+    // add the noise
+
+    if (sim_time - mag_last_stamp_ >= mag_delay_)
+    {
+        mag.magnetic_field.x += mag_noiseShapers_.at(0).iterate(mag_gen_(gen));
+        mag.magnetic_field.y += mag_noiseShapers_.at(1).iterate(mag_gen_(gen));
+        mag.magnetic_field.z += mag_noiseShapers_.at(2).iterate(mag_gen_(gen));
+
+        // TODO add the noise to the magnetometer - SOVICJAN - this comment could be deleted
+
+        ph_mag_noise_.publish(mag);
+        mag_last_stamp_ = sim_time;
+    }
 }
 
 //}

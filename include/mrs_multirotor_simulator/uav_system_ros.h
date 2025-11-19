@@ -122,11 +122,11 @@ private:
 
   void publishFCUTF(const MultirotorModel::State& state);
 
-  void publishOdometry(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
-  void publishIMU(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
-  void publishRangefinder(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
-  void publishMag(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
-  void publishAltitude(const MultirotorModel::State& state, const rclcpp::Time & sim_time);
+  void publishOdometry(const MultirotorModel::State& state, const rclcpp::Time& sim_time);
+  void publishIMU(const MultirotorModel::State& state, const rclcpp::Time& sim_time);
+  void publishRangefinder(const MultirotorModel::State& state, const rclcpp::Time& sim_time);
+  void publishMag(const MultirotorModel::State& state, const rclcpp::Time& sim_time);
+  void publishAltitude(const MultirotorModel::State& state, const rclcpp::Time& sim_time);
 
   void timeoutInput(void);
 
