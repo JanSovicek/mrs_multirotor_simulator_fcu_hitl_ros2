@@ -237,8 +237,26 @@ bool SerialPort::sendCharArray(uint8_t* buffer, int len) {
 //}
 
 /* read() //{ */
-int SerialPort::readSerial(uint8_t* arr, int arr_max_size) {
-  return read(serial_port_fd_, arr, arr_max_size);
+uint32_t SerialPort::readSerial(uint8_t* arr, uint32_t arr_max_size) {
+  
+  uint32_t nBytesRead = 0U;
+
+  int readResult = read(serial_port_fd_, arr, static_cast<size_t>(arr_max_size));
+
+  if(0 < readResult)
+  {
+    nBytesRead = static_cast<uint32_t>(readResult);
+  }
+  else if(0 == readResult)
+  {
+    /*End of file reached - let nBytesRead = 0U*/
+  }
+  else
+  {
+    /*Error occurred - let nBytesRead = 0U*/
+  }
+
+  return nBytesRead;
 }
 
 //}

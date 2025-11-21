@@ -166,41 +166,41 @@ void SerialApi::Receiver()
     state = WAITING_FOR_SYNC0;
     bool receptionComplete = false;
     RCLCPP_INFO_ONCE(node_->get_logger(), "[SerialApi]: ReceiverActive spinning");
-    int readBytes = 0; // amount of read bytes
-    int toRead = 0;    // amount of bytes needed to read
-    int toFlush = 0;
-    while (rclcpp::ok)
+    uint32_t readBytes = 0U; // amount of read bytes
+    uint32_t toRead = 0U;    // amount of bytes needed to read
+    uint32_t toFlush = 0U;
+    while (rclcpp::ok())
     {
         switch (state)
         {
         case WAITING_FOR_SYNC0:
         {
 
-            if (readBytes >= 1)
+            if (readBytes >= 1U)
             {
                 if (recvdMsg.s.sync0 != 'M')
                 {
                     RCLCPP_ERROR(node_->get_logger(),"[SerialApi] first is the culprit");
-                    toFlush = 1;
+                    toFlush = 1U;
                     goto msg_reset;
                 }
                 state = WAITING_FOR_SYNC1;
-                msg_len = 1;
+                msg_len = 1U;
             }
             else
             {
-                toRead = 1;
+                toRead = 1U;
             }
             break;
         }
         case WAITING_FOR_SYNC1:
         {
-            if (readBytes >= 2)
+            if (readBytes >= 2U)
             {
                 if (recvdMsg.s.sync1 != 'R')
                 {
                     RCLCPP_ERROR(node_->get_logger(),"[SerialApi] second is the culprit");
-                    toFlush = 2;
+                    toFlush = 2U;
                     goto msg_reset;
                 }
                 state = WAITING_FOR_HEADER;
@@ -208,7 +208,7 @@ void SerialApi::Receiver()
             }
             else
             {
-                toRead = 1;
+                toRead = 1U;
             }
             break;
         }
@@ -220,7 +220,7 @@ void SerialApi::Receiver()
                 {
                     RCLCPP_ERROR(node_->get_logger(),"[SerialApi] third is the culprit");
 
-                    toFlush = 2;
+                    toFlush = 2U;
                     goto msg_flush;
                 }
                 msg_len = UMSG_HEADER_SIZE;
@@ -240,12 +240,12 @@ void SerialApi::Receiver()
                 if (umsg_calcCRC(recvdMsg.raw, recvdMsg.s.len - 1) != recvdMsg.raw[recvdMsg.s.len - 1])
                 {
                     RCLCPP_ERROR(node_->get_logger(),"[SerialApi] forth is the culprit");
-                    toFlush = 2;
+                    toFlush = 2U;
                     goto msg_flush;
                 }
                 msg_len += (recvdMsg.s.len - msg_len);
                 receptionComplete = true;
-                readBytes = 0;
+                readBytes = 0U;
             }
             else
             {
@@ -255,7 +255,7 @@ void SerialApi::Receiver()
         break;
 
         default:
-            toFlush = 2;
+            toFlush = 2U;
             goto msg_flush;
             break;
         }
@@ -298,32 +298,33 @@ void SerialApi::Receiver()
         {
             // RCLCPP_INFO(node_->get_logger(),"[SerialApi] there are %d bytes to read", toRead);
 
-            int received = ser.readSerial(recvdMsg.raw + readBytes, toRead);
+            uint32_t received = ser.readSerial(recvdMsg.raw + readBytes, toRead);
             // RCLCPP_INFO(node_->get_logger(),"[SerialApi] there was %d bytes received", received);
             readBytes += received;
-            toRead += -received;
+            toRead -= received;
         }
 
         continue;
 
-    // throw out the header and try to catch the next one
+    /*Throw out the header and try to catch the next one*/
     msg_reset:
     msg_flush:
-        readBytes += -toFlush; // flush the header
-        if (readBytes >= 0)
+        if (readBytes > toFlush)
         {
-            for (size_t i = 0; i < readBytes; i++)
+            readBytes -= toFlush; // flush the header
+
+            for (uint32_t i = 0U; i < readBytes; i++)
             {
                 recvdMsg.raw[i] = recvdMsg.raw[i + toFlush];
             }
         }
         else
         {
-            readBytes = 0;
+            readBytes = 0U;
         }
-        msg_len = 0;
+        msg_len = 0U;
         state = WAITING_FOR_SYNC0;
-        toRead = 0;
+        toRead = 0U;
         receptionComplete = false;
     }
 }

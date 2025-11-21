@@ -32,7 +32,14 @@ public:
 
   bool checkConnected();
 
-  int readSerial(uint8_t* arr, int arr_max_size);
+  /**
+   * @param arr buffer array to long incoming data
+   * @param arr_max_size length of the buffer array
+   * 
+   * @return 0U in case of out of file or error occurred,
+   * @return number of read bytes otherwise
+   */
+  uint32_t readSerial(uint8_t* arr, uint32_t arr_max_size);
 
   int      serial_port_fd_;
   uint8_t  input_buffer[1024];
