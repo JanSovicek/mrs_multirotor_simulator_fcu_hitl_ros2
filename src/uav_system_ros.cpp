@@ -265,29 +265,22 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
 
   // | ----------------------- load the rates for publishing ----------------------- |
 
-  /*Initiate time delays*/
-  //imu_delay_(rclcpp::Duration::from_nanoseconds(0.0));
-  //mag_delay_(rclcpp::Duration::from_nanoseconds(0.0));
-  //altitude_delay_(rclcpp::Duration::from_nanoseconds(0.0));
-  //position_delay_(rclcpp::Duration::from_nanoseconds(0.0));
-  //range_delay_(rclcpp::Duration::from_nanoseconds(0.0));
-
   double frequency = 0;
 
   param_loader.loadParam("imu_rate", frequency);
-  imu_delay_ = (static_cast<int64_t>(1e9 / frequency));
+  imu_delay_ = (1.0 / frequency);
 
   param_loader.loadParam("mag_rate", frequency);
-  mag_delay_ = (static_cast<int64_t>(1e9 / frequency));
+  mag_delay_ = (1.0 / frequency);
 
   param_loader.loadParam("altitude_rate", frequency);
-  altitude_delay_ = (static_cast<int64_t>(1e9 / frequency));
+  altitude_delay_ = (1.0 / frequency);
 
   param_loader.loadParam("position_rate", frequency);
-  position_delay_ = (static_cast<int64_t>(1e9 / frequency));
+  position_delay_ = (1.0/ frequency);
 
   param_loader.loadParam("range_rate", frequency);
-  range_delay_ = (static_cast<int64_t>(1e9 / frequency));
+  range_delay_ = (1.0 / frequency);
 
   if (!param_loader.loadedSuccessfully())
   {
