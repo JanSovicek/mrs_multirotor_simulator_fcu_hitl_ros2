@@ -98,6 +98,19 @@ ament_target_dependencies(MrsMultirotorSimulator_Simulator
 
 rclcpp_components_register_nodes(MrsMultirotorSimulator_Simulator PLUGIN "mrs_multirotor_simulator::MultirotorSimulator" EXECUTABLE MrsMultirotorSimulator_Simulator)
 
+
+#Generate uMsgLib source code
+execute_process(
+    COMMAND bash "${CMAKE_SOURCE_DIR}/scripts/generate_umsg_library.sh"
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    RESULT_VARIABLE result
+    ERROR_VARIABLE error
+)
+
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Script generate_umsg_library.sh failed with error: ${error}")
+endif()
+
 # UMSG Library
 
 set(UMSG_PORT "POSIX")
