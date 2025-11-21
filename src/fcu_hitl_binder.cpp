@@ -93,7 +93,7 @@ namespace mrs_fcu_hitl_binder
 
         // | -------------------------- system ------------------------ |
 
-        std::vector<std::unique_ptr<UavSystemRos>> uavs_;
+        std::vector<std::unique_ptr<mrs_multirotor_simulator::UavSystemRos>> uavs_;
 
         // | ------------------------- methods ------------------------ |
 

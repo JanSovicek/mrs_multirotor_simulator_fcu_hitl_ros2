@@ -42,14 +42,20 @@ set(DEPENDENCIES
   mrs_uav_hw_api
   Eigen3
   backward_ros
+  #HwApiMrsFcu dependencies
+  mrs_modules_msgs
+  mavros_msgs
 )
 
-set(LIBRARIES
+set(LIBS
+  MrsMultirotorSimulator_HwApiMrsFcu
+  MrsMultirotorSimulator_FcuHitlBinder
+  )
+
+set(EXPORTED_LIBS
   MrsMultirotorSimulator_Simulator
   MrsMultirotorSimulator_SimulatorSystemRos
-  MrsMultirotorSimulator_HwApiMrsFcu
-  MrsMultirotorSimulator_FcuBinder
-  )
+)
 
 foreach(DEP IN LISTS DEPENDENCIES)
   find_package(${DEP} REQUIRED)
@@ -69,7 +75,7 @@ include_directories(
 
 add_library(MrsMultirotorSimulator_SimulatorSystemRos SHARED
   src/uav_system_ros.cpp
-  src/iir_filter.ccp
+  #src/iir_filter.cpp
 )
 
 ament_target_dependencies(MrsMultirotorSimulator_SimulatorSystemRos
@@ -95,7 +101,7 @@ rclcpp_components_register_nodes(MrsMultirotorSimulator_Simulator PLUGIN "mrs_mu
 # UMSG Library
 
 set(UMSG_PORT "POSIX")
-add_subdirectory(umsg_lib)
+add_subdirectory(umsg/umsg_lib)
 
 
 # HW API MRS FCU
@@ -104,7 +110,7 @@ add_subdirectory(umsg_lib)
 add_library(MrsMultirotorSimulator_HwApiMrsFcu SHARED
   src/hw_api_mrs_fcu.cpp
   src/serial_port.cpp
-  src/SerialApi.cpp
+  src/serial_api.cpp
   )
 
 target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu
@@ -115,21 +121,22 @@ ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsFcu
   ${DEPENDENCIES}
 )
 
+target_compile_definitions(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
 # FCU HITL Binder
 # Interfacing FCU with HITL simulation
 
 
-add_library(MrsMultirotorSimulator_FcuHiltBinder
-  src/fcu_hilt_binder.cpp
+add_library(MrsMultirotorSimulator_FcuHitlBinder SHARED
+  src/fcu_hitl_binder.cpp
   src/serial_port.cpp
   )
 
-target_link_libraries(MrsMultirotorSimulator_FcuHiltBinder
+target_link_libraries(MrsMultirotorSimulator_FcuHitlBinder
   uMsgLib
   )
 
-ament_target_dependencies(MrsMultirotorSimulator_FcuHiltBinder
+ament_target_dependencies(MrsMultirotorSimulator_FcuHitlBinder
   ${DEPENDENCIES}
 )
 
@@ -153,18 +160,27 @@ rclcpp_components_register_nodes(MrsMultirotorSimulator_FcuHitlBinder PLUGIN "mr
 ## --------------------------------------------------------------
 
 # <package of the base class>, <relative path to the xml>
+ament_export_libraries(MrsMultirotorSimulator_HwApiMrsFcu)
 pluginlib_export_plugin_description_file(mrs_uav_hw_api plugins.xml)
 
 ## --------------------------------------------------------------
 ## |                           install                          |
 ## --------------------------------------------------------------
 
+
+install(
+  TARGETS ${LIBS}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+
 ament_export_libraries(
-  ${LIBRARIES}
+  ${EXPORTED_LIBS}
 )
 
 install(
-  TARGETS ${LIBRARIES}
+  TARGETS ${EXPORTED_LIBS}
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

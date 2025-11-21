@@ -6,9 +6,9 @@
 
 #include <std_srvs/std_srvs/srv/trigger.h>
 
-#include <mrs_modules_msgs/msg/bestpos.h>
+#include <mrs_modules_msgs/mrs_modules_msgs/msg/bestpos.hpp>
 
-#include <nav_msgs/msg/odometry.h>
+#include <nav_msgs/nav_msgs/msg/odometry.h>
 
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/attitude_converter.h>
@@ -70,16 +70,16 @@ namespace mrs_uav_fcu_api
         mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry> sh_altitude_;
         mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField> sh_mag_;
 
-        void callbackOdometry(const nav_msgs::msg::Odometry::ConstPtr msg);
-        void callbackIMU(const sensor_msgs::msg::Imu::ConstPtr msg);
-        void callbackRangeFinder(const sensor_msgs::msg::Range::ConstPtr msg);
-        void callbackAltitude(const nav_msgs::msg::Odometry::ConstPtr msg);
-        void callbackMag(const sensor_msgs::msg::MagneticField::ConstPtr msg);
+        void callbackOdometry(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
+        void callbackIMU(const sensor_msgs::msg::Imu::ConstSharedPtr msg);
+        void callbackRangeFinder(const sensor_msgs::msg::Range::ConstSharedPtr msg);
+        void callbackAltitude(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
+        void callbackMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg);
 
-        void publishImu(const sensor_msgs::msg::Imu::ConstPtr msg, rclcpp::Time &sim_time);
-        void publishMag(const sensor_msgs::msg::MagneticField::ConstPtr msg, rclcpp::Time &sim_time);
-        void publishAltitude(const nav_msgs::msg::Odometry::ConstPtr msg, rclcpp::Time &sim_time);
-        void publishGps(const nav_msgs::msg::Odometry::ConstPtr msg, rclcpp::Time &sim_time);
+        void publishImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg, rclcpp::Time &sim_time);
+        void publishMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg, rclcpp::Time &sim_time);
+        void publishAltitude(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time);
+        void publishGps(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time);
 
         // | ----------------------- publishers ----------------------- |
         mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd> ph_actuator_cmd_;
@@ -134,7 +134,7 @@ namespace mrs_uav_fcu_api
     /*| ------------------------- Publishers ------------------------- |*/
 
     // PublishImu//{
-    void hitl_binder::publishImu(const sensor_msgs::msg::Imu::ConstPtr msg, rclcpp::Time &sim_time)
+    void hitl_binder::publishImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg, rclcpp::Time &sim_time)
     { /*//{*/
         static double index = 0;
 
@@ -169,7 +169,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(out);
     } /*//}*/ /*//}*/
 
-    void hitl_binder::publishMag(const sensor_msgs::msg::MagneticField::ConstPtr msg, rclcpp::Time &sim_time)
+    void hitl_binder::publishMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg, rclcpp::Time &sim_time)
     {
         /*Set header*/
         umsg_MessageToTransfer out;
@@ -196,7 +196,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(out);
     }
 
-    void hitl_binder::publishAltitude(const nav_msgs::msg::Odometry::ConstPtr msg, rclcpp::Time &sim_time)
+    void hitl_binder::publishAltitude(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time)
     {
         /*Set header*/
         umsg_MessageToTransfer out;
@@ -219,7 +219,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(out);
     }
 
-    void hitl_binder::publishGps(const nav_msgs::msg::Odometry::ConstPtr msg, rclcpp::Time &sim_time)
+    void hitl_binder::publishGps(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time)
     {
         /*Set header*/
         umsg_MessageToTransfer out;
@@ -268,7 +268,7 @@ namespace mrs_uav_fcu_api
 
     /*| ------------------------- callbacks ------------------------- |*/
 
-    void hitl_binder::callbackOdometry(const nav_msgs::msg::Odometry::ConstPtr msg)
+    void hitl_binder::callbackOdometry(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -305,7 +305,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(notifyMsg);
     }
 
-    void hitl_binder::callbackIMU(const sensor_msgs::msg::Imu::ConstPtr msg)
+    void hitl_binder::callbackIMU(const sensor_msgs::msg::Imu::ConstSharedPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -344,12 +344,15 @@ namespace mrs_uav_fcu_api
         //  todo send the message over the serial
     }
 
-    void hitl_binder::callbackRangeFinder(const sensor_msgs::msg::Range::ConstPtr msg)
+    void hitl_binder::callbackRangeFinder(const sensor_msgs::msg::Range::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+
         RCLCPP_WARN_ONCE(node_->get_logger(),"rangefinder callback not yet implemented");
     }
 
-    void hitl_binder::callbackAltitude(const nav_msgs::msg::Odometry::ConstPtr msg)
+    void hitl_binder::callbackAltitude(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -383,7 +386,7 @@ namespace mrs_uav_fcu_api
         //  todo send the message over the serial
     }
 
-    void hitl_binder::callbackMag(const sensor_msgs::msg::MagneticField::ConstPtr msg)
+    void hitl_binder::callbackMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -485,16 +488,16 @@ namespace mrs_uav_fcu_api
 
         // | --------------------- topic callbacks -------------------- |
 
-        bool callbackActuatorCmd(const mrs_msgs::msg::HwApiActuatorCmd::ConstPtr msg);
-        bool callbackControlGroupCmd(const mrs_msgs::msg::HwApiControlGroupCmd::ConstPtr msg);
-        bool callbackAttitudeRateCmd(const mrs_msgs::msg::HwApiAttitudeRateCmd::ConstPtr msg);
-        bool callbackAttitudeCmd(const mrs_msgs::msg::HwApiAttitudeCmd::ConstPtr msg);
-        bool callbackAccelerationHdgRateCmd(const mrs_msgs::msg::HwApiAccelerationHdgRateCmd::ConstPtr msg);
-        bool callbackAccelerationHdgCmd(const mrs_msgs::msg::HwApiAccelerationHdgCmd::ConstPtr msg);
-        bool callbackVelocityHdgRateCmd(const mrs_msgs::msg::HwApiVelocityHdgRateCmd::ConstPtr msg);
-        bool callbackVelocityHdgCmd(const mrs_msgs::msg::HwApiVelocityHdgCmd::ConstPtr msg);
-        bool callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstPtr msg);
-        void callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstPtr msg);
+        bool callbackActuatorCmd(const mrs_msgs::msg::HwApiActuatorCmd::ConstSharedPtr msg);
+        bool callbackControlGroupCmd(const mrs_msgs::msg::HwApiControlGroupCmd::ConstSharedPtr msg);
+        bool callbackAttitudeRateCmd(const mrs_msgs::msg::HwApiAttitudeRateCmd::ConstSharedPtr msg);
+        bool callbackAttitudeCmd(const mrs_msgs::msg::HwApiAttitudeCmd::ConstSharedPtr msg);
+        bool callbackAccelerationHdgRateCmd(const mrs_msgs::msg::HwApiAccelerationHdgRateCmd::ConstSharedPtr msg);
+        bool callbackAccelerationHdgCmd(const mrs_msgs::msg::HwApiAccelerationHdgCmd::ConstSharedPtr msg);
+        bool callbackVelocityHdgRateCmd(const mrs_msgs::msg::HwApiVelocityHdgRateCmd::ConstSharedPtr msg);
+        bool callbackVelocityHdgCmd(const mrs_msgs::msg::HwApiVelocityHdgCmd::ConstSharedPtr msg);
+        bool callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstSharedPtr msg);
+        void callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstSharedPtr msg);
         // | -------------------- service callbacks ------------------- |
 
         std::tuple<bool, std::string> callbackArming(const bool &request);
@@ -529,9 +532,9 @@ namespace mrs_uav_fcu_api
         hitl_binder hitl_binder_;
 
         // output methods for rtk
-        void publishGroundTruth(const nav_msgs::msg::Odometry::ConstPtr msg);
+        void publishGroundTruth(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
 
-        void publishRTK(const std::shared_ptr<mrs_modules_msgs__msg__Bestpos> msg);
+        void publishRTK(const std::shared_ptr<mrs_modules_msgs::msg::Bestpos> msg);
 
         double RCChannelToRange(const double &rc_value);
 
@@ -541,7 +544,7 @@ namespace mrs_uav_fcu_api
         void publishAttitude(const umsg_estimation_attitude_t &msg);
         void publishOdometryLocal(const umsg_estimation_position_t &msg);
         void publishNavsatFix(umsg_sensors_gps_t &msg);
-        void publishDistanceSensor(const sensor_msgs::msg::Range::ConstPtr msg); // not yet implemented
+        void publishDistanceSensor(const sensor_msgs::msg::Range::ConstSharedPtr msg); // not yet implemented
         void publishImu(const umsg_sensors_imu_t &msg);
         void publishMagnetometer(const umsg_sensors_mag_t &msg);
         void publishMagneticField(const umsg_sensors_mag_t &msg);
@@ -639,7 +642,7 @@ namespace mrs_uav_fcu_api
         }
         else /*!_simulation_*/
         {
-            // sh_rtk_ = mrs_lib::SubscribeHandler<mrs_modules_msgs::Bestpos>(shopts, "rtk_in", &MrsUavFcuApi::callbackRTK, this);
+            // sh_rtk_ = mrs_lib::SubscribeHandler<mrs_modules_msgs::msg::Bestpos>(shopts, "rtk_in", &MrsUavFcuApi::callbackRTK, this);
         }
 
         // | ----------------------- publishers ----------------------- |
@@ -702,7 +705,7 @@ namespace mrs_uav_fcu_api
 
     /* callbackAttitudeRateCmd() //{ */
 
-    bool MrsUavFcuApi::callbackAttitudeRateCmd(const mrs_msgs::msg::HwApiAttitudeRateCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackAttitudeRateCmd(const mrs_msgs::msg::HwApiAttitudeRateCmd::ConstSharedPtr msg)
     {
 
         RCLCPP_INFO_ONCE(node_->get_logger(),"[MrsUavFcuApi]: getting attitude rate cmd");
@@ -735,7 +738,7 @@ namespace mrs_uav_fcu_api
 
     /* callbackAttitudeCmd() //{ */
 
-    bool MrsUavFcuApi::callbackAttitudeCmd(const mrs_msgs::msg::HwApiAttitudeCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackAttitudeCmd(const mrs_msgs::msg::HwApiAttitudeCmd::ConstSharedPtr msg)
     {
 
         RCLCPP_INFO_ONCE(node_->get_logger(), "[MrsUavFcuApi]: getting attitude cmd");
@@ -1035,7 +1038,7 @@ namespace mrs_uav_fcu_api
 
     /* callbackDistanceSensor() //{ */
 
-    void MrsUavFcuApi::publishDistanceSensor(const sensor_msgs::msg::Range::ConstPtr msg)
+    void MrsUavFcuApi::publishDistanceSensor(const sensor_msgs::msg::Range::ConstSharedPtr msg)
     {
 
         if (!is_initialized_)
@@ -1298,7 +1301,7 @@ namespace mrs_uav_fcu_api
 
     /* callbackGroundTruth() //{ */
 
-    void MrsUavFcuApi::publishGroundTruth(const nav_msgs::msg::Odometry::ConstPtr msg)
+    void MrsUavFcuApi::publishGroundTruth(const nav_msgs::msg::Odometry::ConstSharedPtr msg)
     {
         if (!ser_->isSynced())
         {
@@ -1383,7 +1386,7 @@ namespace mrs_uav_fcu_api
 
     /* callbackRTK() //{ */
 
-    void MrsUavFcuApi::publishRTK(const std::shared_ptr<mrs_modules_msgs__msg__Bestpos> msg)
+    void MrsUavFcuApi::publishRTK(const std::shared_ptr<mrs_modules_msgs::msg::Bestpos> msg)
     {
         if (!ser_->isSynced())
         {
@@ -1401,27 +1404,27 @@ namespace mrs_uav_fcu_api
         rtk_msg_out.header.stamp = clock_->now();
         rtk_msg_out.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
 
-        if (std::string(msg->position_type.data) == "L1_INT")
+        if (msg->position_type == "L1_INT")
         {
             rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.RTK_FIX;
         }
-        else if (std::string(msg->position_type.data) == "L1_FLOAT")
+        else if (msg->position_type == "L1_FLOAT")
         {
             rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.RTK_FLOAT;
         }
-        else if (std::string(msg->position_type.data) == "PSRDIFF")
+        else if (msg->position_type == "PSRDIFF")
         {
             rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.DGPS;
         }
-        else if (std::string(msg->position_type.data) == "SINGLE")
+        else if (msg->position_type == "SINGLE")
         {
             rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.SPS;
         }
-        else if (std::string(msg->position_type.data) == "NONE")
+        else if (msg->position_type == "NONE")
         {
             rtk_msg_out.status.status = sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
             rtk_msg_out.fix_type.fix_type = rtk_msg_out.fix_type.NO_FIX;
@@ -1550,41 +1553,62 @@ namespace mrs_uav_fcu_api
 
     // | ------------------------- methods ------------------------ |
 
-    bool MrsUavFcuApi::callbackActuatorCmd(const mrs_msgs::msg::HwApiActuatorCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackActuatorCmd(const mrs_msgs::msg::HwApiActuatorCmd::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+
         return false;
     }
-    bool MrsUavFcuApi::callbackControlGroupCmd(const mrs_msgs::msg::HwApiControlGroupCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackControlGroupCmd(const mrs_msgs::msg::HwApiControlGroupCmd::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+
         return false;
     }
-    bool MrsUavFcuApi::callbackAccelerationHdgRateCmd(const mrs_msgs::msg::HwApiAccelerationHdgRateCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackAccelerationHdgRateCmd(const mrs_msgs::msg::HwApiAccelerationHdgRateCmd::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+
         return false;
     }
-    bool MrsUavFcuApi::callbackAccelerationHdgCmd(const mrs_msgs::msg::HwApiAccelerationHdgCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackAccelerationHdgCmd(const mrs_msgs::msg::HwApiAccelerationHdgCmd::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+
         return false;
     }
-    bool MrsUavFcuApi::callbackVelocityHdgRateCmd(const mrs_msgs::msg::HwApiVelocityHdgRateCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackVelocityHdgRateCmd(const mrs_msgs::msg::HwApiVelocityHdgRateCmd::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+
         return false;
     }
-    bool MrsUavFcuApi::callbackVelocityHdgCmd(const mrs_msgs::msg::HwApiVelocityHdgCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackVelocityHdgCmd(const mrs_msgs::msg::HwApiVelocityHdgCmd::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+
         return false;
     }
-    bool MrsUavFcuApi::callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstPtr msg)
+    bool MrsUavFcuApi::callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+
         return false;
     }
-    void MrsUavFcuApi::callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstPtr msg)
+    void MrsUavFcuApi::callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstSharedPtr msg)
     {
+        /*To silence compiler*/
+        (void)msg;
+        
         return;
     }
     //}
 
-} // namespace mrs_uav_px4_api
-
-#include <pluginlib/class_list_macros.hpp>
-PLUGINLIB_EXPORT_CLASS(mrs_uav_fcu_api::MrsUavFcuApi, mrs_uav_hw_api::MrsUavHwApi)
+} // namespace mrs_uav_fcu_api
