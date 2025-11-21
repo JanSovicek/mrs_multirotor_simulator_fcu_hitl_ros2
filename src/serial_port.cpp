@@ -254,6 +254,7 @@ uint32_t SerialPort::readSerial(uint8_t* arr, uint32_t arr_max_size) {
   else
   {
     /*Error occurred - let nBytesRead = 0U*/
+    printf("Error while reading from serial line!\n");
   }
 
   return nBytesRead;
