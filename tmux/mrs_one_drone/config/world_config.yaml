@@ -2,12 +2,12 @@ world_origin:
 
   units: "LATLON" # {"UTM, "LATLON"}
 
-  origin_x: 47.397743
-  origin_y: 8.545594
+  origin_x: 15.2
+  origin_y: 14.3
 
 safety_area:
 
-  enabled: true
+  enabled: false
 
   horizontal:
 

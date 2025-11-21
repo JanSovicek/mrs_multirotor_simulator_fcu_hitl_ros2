@@ -1,3 +1,6 @@
+simulation_rate: 900
+clock_rate: 900
+
 frames:
   fcu:
     publish_tf: false
@@ -5,10 +8,10 @@ frames:
 uav1:
   type: "x500"
   spawn:
-    x: 10.0
-    y: 15.0
+    x: 0.0
+    y: 0.0
     z: 0.0
-    heading: 3.14
+    heading: 0.0
 
 dynamic:
   realtime_factor: 1.0 # [-]

@@ -5,16 +5,42 @@
 
 mrs_uav_managers:
 
+  control_manager:
+
+      trackers: [
+        "FlipTracker"
+      ]
+
+      safety:
+
+        tilt_limit:
+
+          eland:
+            enabled: false
+            limit: 75.0 # [deg]
+
+          disarm:
+            enabled: false
+            limit: 75.0 # [deg]
+
+        tilt_error_disarm:
+          enabled: false
+          timeout: 0.5 # [s] # for how long the error has to be present to disarm
+          error_threshold: 20.0 # [deg]
+
+        yaw_error_eland:
+          enabled: false
+          limit: 90.0 # [deg]
+
   estimation_manager:
 
     # loaded state estimator plugins
     state_estimators: [
       "gps_baro",
-      "gps_garmin",
     ]
 
-    initial_state_estimator: "gps_garmin" # will be used as the first state estimator
-    agl_height_estimator: "garmin_agl" # only slightly filtered height for checking min height (not used in control feedback)
+    initial_state_estimator: "gps_baro" # will be used as the first state estimator #was originally gps_garmin in ROS2
+    agl_height_estimator: "" # only slightly filtered height for checking min height (not used in control feedback)
 
   uav_manager:
 
@@ -30,10 +56,18 @@ mrs_uav_managers:
 
     midair_activation:
 
-      during_activation:
-        controller: "MidairActivationController"
-        tracker: "MidairActivationTracker"
-
       after_activation:
         controller: "MpcController"
         tracker: "MpcTracker"
+    
+    constraint_manager:
+
+    # list of allowed constraints per odometry mode
+    allowed_constraints:
+      gps_baro: ["slow", "medium", "fast"]
+
+    # those constraints will be used automatically when a localization mode switches
+    # and the current constraints are not in the allowed list (next paragraphs)
+    default_constraints:
+      gps_baro: "fast"
+      

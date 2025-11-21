@@ -24,6 +24,7 @@ windows:
       layout: tiled
       panes:
         - ros2 launch mrs_multirotor_simulator hw_api.launch.py
+          custom_config:=./config/hw_api.yaml
   - core:
       layout: tiled
       panes:
@@ -41,6 +42,11 @@ windows:
       panes:
         - ros2 launch mrs_uav_autostart automatic_start.launch.py custom_config:=./config/automatic_start.yaml
         - waitForCore && ./takeoff.sh
+  - flip:
+    layout: tiled
+    panes:
+      - "history -s ros2 service call /uav1/control_manager/switch_tracker mrs_msgs/srv/TrackerSwitch '{tracker: FlipTracker}'"
+      - "history -s ros2 service call /uav1/control_manager/flip_tracker/flip std_srvs/srv/Trigger '{}'"
   - commands:
       layout: tiled
       panes:
@@ -56,4 +62,9 @@ windows:
   - layout:
       layout: tiled
       panes:
-        - waitForCore; ~/.i3/layout_manager.sh ./layout.json
+        #- waitForCore; ~/.i3/layout_manager.sh ./layout.json
+  - juggler:
+      layout: tiled
+      panes:
+        - waitForRos; sleep 2; ros2 run plotjuggler plotjuggler
+        #- waitForRos; sleep 2; rosbag record -a 
