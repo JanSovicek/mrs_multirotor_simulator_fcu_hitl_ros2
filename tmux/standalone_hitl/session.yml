@@ -1,0 +1,40 @@
+# do not modify these
+root: ./
+name: simulation
+socket_name: mrs
+attach: false
+tmux_options: -f /etc/ctu-mrs/tmux.conf
+# you can modify these
+startup_window: hitl
+pre_window: export UAV_NAME=uav1;
+            export UAV_TYPE=f450;
+            export PLATFORM_CONFIG=`ros2 pkg prefix mrs_multirotor_simulator`/share/mrs_multirotor_simulator/config/mrs_uav_system/$UAV_TYPE.yaml;
+            export USE_SIM_TIME="true";
+            export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+windows:
+  - router:
+      layout: tiled
+      panes:
+        - ros2 run rmw_zenoh_cpp rmw_zenohd
+  - simulator:
+      layout: tiled
+      panes:
+        - ros2 launch mrs_multirotor_simulator multirotor_simulator.launch.py custom_config:=./custom_configs/simulator.yaml
+  - hitl:
+      layout: tiled
+      panes:
+        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ros2 launch mrs_multirotor_simulator hw_api.launch.py custom_config:=./config/hw_api.yaml
+        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ros2 topic echo /uav1/hw_api/rc_channels
+  - goto:
+      layout: tiled
+      panes:
+        - 'history -s ./goto.py'
+  - juggler:
+      layout: tiled
+      panes:
+        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ros2 run plotjuggler plotjuggler 
+        #-l custom_configs/juggler-layout.xml # uncomment once custom config is added
+  - rviz:
+      layout: tiled
+      panes:
+        - until ros2 topic echo /clock use_sim_time &>/dev/null; do sleep 0.2; done; ros2 run rviz2 rviz2 -d ./rviz.rviz

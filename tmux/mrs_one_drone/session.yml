@@ -62,9 +62,9 @@ windows:
   - layout:
       layout: tiled
       panes:
-        #- waitForCore; ~/.i3/layout_manager.sh ./layout.json
+        #- until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ~/.i3/layout_manager.sh ./layout.json
   - juggler:
       layout: tiled
       panes:
-        - waitForRos; sleep 2; ros2 run plotjuggler plotjuggler
-        #- waitForRos; sleep 2; rosbag record -a 
+        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ros2 run plotjuggler plotjuggler
+        #- until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; rosbag record -a 
