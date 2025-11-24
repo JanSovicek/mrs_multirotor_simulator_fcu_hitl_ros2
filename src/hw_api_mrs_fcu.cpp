@@ -475,9 +475,12 @@ namespace mrs_uav_fcu_api
     {
 
     public:
-        ~MrsUavFcuApi() {};
+        MrsUavFcuApi() {}
+        ~MrsUavFcuApi() override{}
 
         void initialize(const rclcpp::Node::SharedPtr &parent_node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers);
+
+        void destroy() override;
 
         rclcpp::CallbackGroup::SharedPtr cbgrp_subs_;
 
@@ -672,6 +675,10 @@ namespace mrs_uav_fcu_api
         is_initialized_ = true;
     }
 
+    //}
+
+    /*destroy() //{*/
+    void MrsUavFcuApi::destroy() {}
     //}
 
     /* getStatus() //{ */
@@ -1612,3 +1619,6 @@ namespace mrs_uav_fcu_api
     //}
 
 } // namespace mrs_uav_fcu_api
+
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(mrs_uav_fcu_api::MrsUavFcuApi, mrs_uav_hw_api::MrsUavHwApi)

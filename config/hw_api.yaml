@@ -1,4 +1,4 @@
-hw_interface_plugin: "mrs_uav_fcu_api::Api"
+hw_interface_plugin: "mrs_uav_fcu_api::MrsUavFcuApi"
 
 plugin:
 

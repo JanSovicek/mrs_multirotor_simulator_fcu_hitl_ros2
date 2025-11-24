@@ -173,8 +173,20 @@ rclcpp_components_register_nodes(MrsMultirotorSimulator_FcuHitlBinder PLUGIN "mr
 ## --------------------------------------------------------------
 
 # <package of the base class>, <relative path to the xml>
+#ament_export_libraries(MrsMultirotorSimulator_HwApiMrsFcu)
+#pluginlib_export_plugin_description_file(mrs_uav_hw_api plugins.xml)
+
+# Export the HwApi library for pluginlib (no need to export uMsgLib)
 ament_export_libraries(MrsMultirotorSimulator_HwApiMrsFcu)
-pluginlib_export_plugin_description_file(mrs_uav_hw_api plugins.xml)
+
+# Install and register our plugins.xml (ensure plugins.xml is in package root)
+install(
+  FILES plugins.xml
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Tell pluginlib / ament where our plugin XML is (use this package name)
+pluginlib_export_plugin_description_file(${PROJECT_NAME} plugins.xml)
 
 ## --------------------------------------------------------------
 ## |                           install                          |
@@ -240,3 +252,22 @@ ament_export_dependencies(
 )
 
 ament_package()
+
+
+# -----------------------------
+# | Test plugin loader executable
+# -----------------------------
+add_executable(test_plugin test/test_plugin.cpp)
+ament_target_dependencies(test_plugin
+  pluginlib
+  mrs_uav_hw_api
+  rclcpp
+)
+target_include_directories(test_plugin PUBLIC
+  include
+  ${mrs_uav_hw_api_INCLUDE_DIRS}
+)
+
+install(TARGETS test_plugin
+  DESTINATION lib/${PROJECT_NAME}
+)

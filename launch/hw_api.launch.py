@@ -95,8 +95,8 @@ def generate_launch_description():
 
             ComposableNode(
 
-                package="mrs_uav_hw_api",
-                plugin='mrs_uav_hw_api::HwApiManager',
+                package=pkg_name,
+                plugin='mrs_uav_fcu_api::MrsUavFcuApi',
                 namespace=uav_name,
                 name='hw_api',
                 parameters=[
@@ -121,11 +121,11 @@ def generate_launch_description():
                   #("~/simulator_velocity_hdg_cmd_out", ["/multirotor_simulator/", uav_name, "/velocity_hdg_cmd"]),
                   #("~/simulator_position_cmd_out", ["/multirotor_simulator/", uav_name, "/position_cmd"]),
                   #("~/simulator_tracker_cmd_out", ["/multirotor_simulator/", uav_name, "/tracker_cmd"]),
-                  ("~hitl/imu", ["/multirotor_simulator/", uav_name, "/imu_noise"]),
-                  ("~hitl/odom", ["/multirotor_simulator/", uav_name, "/odom_noise"]),
-                  ("~hitl/actuators_cmd", ["/multirotor_simulator/", uav_name, "/actuators_cmd"]),
-                  ("~hitl/altitude", ["/multirotor_simulator/", uav_name, "/altitude_noise"]),
-                  ("~hitl/magnetometer", ["/multirotor_simulator/", uav_name, "/magnetometer_noise"]),
+                  ("~/hitl/imu", ["/multirotor_simulator/", uav_name, "/imu_noise"]),
+                  ("~/hitl/odom", ["/multirotor_simulator/", uav_name, "/odom_noise"]),
+                  ("~/hitl/actuators_cmd", ["/multirotor_simulator/", uav_name, "/actuators_cmd"]),
+                  ("~/hitl/altitude", ["/multirotor_simulator/", uav_name, "/altitude_noise"]),
+                  ("~/hitl/magnetometer", ["/multirotor_simulator/", uav_name, "/magnetometer_noise"]),
                 
                 ],
             )

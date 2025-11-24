@@ -1,0 +1,19 @@
+frames:
+  fcu:
+    publish_tf: true
+
+uav1:
+  type: "f450"
+  spawn:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+    heading: 0.0
+
+serial_port: "/dev/ttyUSB0"
+baud_rate: 2000000
+
+
+
+start_latitude: 15.2
+start_longditude: 14.3
