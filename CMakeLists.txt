@@ -47,15 +47,15 @@ set(DEPENDENCIES
   mavros_msgs
 )
 
-set(LIBS
+set(LIBRARIES
+  uMsgLib
   MrsMultirotorSimulator_HwApiMrsFcu
   MrsMultirotorSimulator_FcuHitlBinder
-  )
-
-set(EXPORTED_LIBS
   MrsMultirotorSimulator_Simulator
   MrsMultirotorSimulator_SimulatorSystemRos
 )
+
+set(UMSG_PATH ${CMAKE_CURRENT_DIR}umsg/umsg_lib)
 
 foreach(DEP IN LISTS DEPENDENCIES)
   find_package(${DEP} REQUIRED)
@@ -69,6 +69,8 @@ include_directories(
   ${rclcpp_INCLUDE_DIRS}
   ${mrs_lib_INCLUDE_DIRS}
   ${mrs_uav_hw_api_INCLUDE_DIRS}
+  ${UMSG_PATH}/core/inc
+  ${UMSG_PATH}/inc
 )
 
 # ROS Wrapper for the Multirotor UAV System + controllers
@@ -113,9 +115,27 @@ endif()
 
 # UMSG Library
 
-set(UMSG_PORT "POSIX")
-add_subdirectory(umsg/umsg_lib)
+#set(UMSG_PORT "POSIX")
 
+add_library(uMsgLib SHARED
+    ${UMSG_PATH}/core/src/umsg.c
+    # generated files
+    ${UMSG_PATH}/src/sensors.c
+    ${UMSG_PATH}/src/estimation.c
+    ${UMSG_PATH}/src/offboard.c
+    ${UMSG_PATH}/src/autonomy.c
+    ${UMSG_PATH}/src/state.c
+    ${UMSG_PATH}/src/debug.c
+    ${UMSG_PATH}/src/control.c
+    ${UMSG_PATH}/src/umsg_classes.c
+  )
+
+#Select POSIX port
+target_sources(uMsgLib PRIVATE ${UMSG_PATH}/core/src/port_posix.c)
+
+ament_target_dependencies(uMsgLib
+  ${DEPENDENCIES}
+)
 
 # HW API MRS FCU
 # Plugin library for interfacing Simulator with FCU HW
@@ -176,7 +196,7 @@ rclcpp_components_register_nodes(MrsMultirotorSimulator_FcuHitlBinder PLUGIN "mr
 #ament_export_libraries(MrsMultirotorSimulator_HwApiMrsFcu)
 #pluginlib_export_plugin_description_file(mrs_uav_hw_api plugins.xml)
 
-# Export the HwApi library for pluginlib (no need to export uMsgLib)
+# Export the HwApi library for pluginlib
 ament_export_libraries(MrsMultirotorSimulator_HwApiMrsFcu)
 
 # Install and register our plugins.xml (ensure plugins.xml is in package root)
@@ -192,20 +212,12 @@ pluginlib_export_plugin_description_file(${PROJECT_NAME} plugins.xml)
 ## |                           install                          |
 ## --------------------------------------------------------------
 
-
-install(
-  TARGETS ${LIBS}
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-  RUNTIME DESTINATION bin
-)
-
 ament_export_libraries(
-  ${EXPORTED_LIBS}
+  ${LIBRARIES}
 )
 
 install(
-  TARGETS ${EXPORTED_LIBS}
+  TARGETS ${LIBRARIES}
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
