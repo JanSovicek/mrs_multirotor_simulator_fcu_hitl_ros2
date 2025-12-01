@@ -85,11 +85,11 @@ namespace mrs_uav_fcu_api
         mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd> ph_actuator_cmd_;
 
     public:
-        void Init(const rclcpp::Node::SharedPtr parent_node, std::shared_ptr<SerialApi> ser);
+        void Init(const rclcpp::Node::SharedPtr parent_node, std::shared_ptr<SerialApi> ser, mrs_lib::ParamLoader& param_loader);
         bool ParseMessage(umsg_MessageToTransfer &msg);
     };
 
-    void hitl_binder::Init(const rclcpp::Node::SharedPtr parent_node, std::shared_ptr<SerialApi> ser)
+    void hitl_binder::Init(const rclcpp::Node::SharedPtr parent_node, std::shared_ptr<SerialApi> ser, mrs_lib::ParamLoader& param_loader)
     {
         /*Asign Node and Serial class instance*/
         node_ = parent_node;
@@ -100,9 +100,16 @@ namespace mrs_uav_fcu_api
 
         /*Load position parameters*/
         double startLat, startLon;
-        mrs_lib::ParamLoader param_loader(node_, node_->get_name());
+
         param_loader.loadParam("start_latitude", startLat);
-        param_loader.loadParam("start_longditude", startLon);
+        param_loader.loadParam("start_longitude", startLon);
+
+
+        if (!param_loader.loadedSuccessfully()) 
+        {
+            RCLCPP_ERROR(node_->get_logger(), "Could not load all parameters!");
+            rclcpp::shutdown();
+        }
 
         /*Transform latitude and longitude to xy position*/
         mrs_lib::LLtoUTM(startLat, startLon, startY, startX, UTM_zone);
@@ -593,36 +600,61 @@ namespace mrs_uav_fcu_api
 
         // | ------------------- loading parameters ------------------- |
 
-        mrs_lib::ParamLoader param_loader(node_, "MrsUavHwApi");
+        mrs_lib::ParamLoader local_param_loader(node_, "MrsUavHwApi");
+
+        std::string custom_config_path;
+
+        common_handlers_->main_param_loader->loadParam("custom_config", custom_config_path);
+
+        if (custom_config_path != "")
+        {
+            local_param_loader.addYamlFile(custom_config_path);    
+        }
+
+        std::vector<std::string> config_files;
+        common_handlers_->main_param_loader->loadParamReusable("configs", config_files);
+
+        if (!common_handlers_->main_param_loader->loadedSuccessfully())
+        {
+            RCLCPP_ERROR(node_->get_logger(), "Could not load all parameters!");
+            rclcpp::shutdown();
+            exit(1);
+        }
+
+        for (auto config_file : config_files)
+        {
+            RCLCPP_INFO(node_->get_logger(), "loading config files '%s'", config_file.c_str());
+            local_param_loader.addYamlFile(config_file);
+        }
 
         // ask what this does
-        param_loader.loadParam("comms_timeout", _comms_timeout_);
+        local_param_loader.loadParam("comms_timeout", _comms_timeout_);
 
         // ask what this does
-        param_loader.loadParam("simulation", _simulation_);
+        local_param_loader.loadParam("simulation", _simulation_);
 
-        param_loader.loadParam("inputs/control_group", (bool &)_capabilities_.accepts_control_group_cmd);
-        param_loader.loadParam("inputs/attitude_rate", (bool &)_capabilities_.accepts_attitude_rate_cmd);
-        param_loader.loadParam("inputs/attitude", (bool &)_capabilities_.accepts_attitude_cmd);
+        local_param_loader.loadParam("inputs/control_group", (bool &)_capabilities_.accepts_control_group_cmd);
+        local_param_loader.loadParam("inputs/attitude_rate", (bool &)_capabilities_.accepts_attitude_rate_cmd);
+        local_param_loader.loadParam("inputs/attitude", (bool &)_capabilities_.accepts_attitude_cmd);
 
-        param_loader.loadParam("outputs/distance_sensor", (bool &)_capabilities_.produces_distance_sensor);
-        param_loader.loadParam("outputs/gnss", (bool &)_capabilities_.produces_gnss);
-        param_loader.loadParam("outputs/gnss_status", (bool &)_capabilities_.produces_gnss_status);
-        param_loader.loadParam("outputs/rtk", (bool &)_capabilities_.produces_rtk);
-        param_loader.loadParam("outputs/ground_truth", (bool &)_capabilities_.produces_ground_truth);
-        param_loader.loadParam("outputs/imu", (bool &)_capabilities_.produces_imu);
-        param_loader.loadParam("outputs/altitude", (bool &)_capabilities_.produces_altitude);
-        param_loader.loadParam("outputs/magnetometer_heading", (bool &)_capabilities_.produces_magnetometer_heading);
-        param_loader.loadParam("outputs/magnetic_field", (bool &)_capabilities_.produces_magnetic_field);
-        param_loader.loadParam("outputs/rc_channels", (bool &)_capabilities_.produces_rc_channels);
-        param_loader.loadParam("outputs/battery_state", (bool &)_capabilities_.produces_battery_state);
-        param_loader.loadParam("outputs/position", (bool &)_capabilities_.produces_position);
-        param_loader.loadParam("outputs/orientation", (bool &)_capabilities_.produces_orientation);
-        param_loader.loadParam("outputs/velocity", (bool &)_capabilities_.produces_velocity);
-        param_loader.loadParam("outputs/angular_velocity", (bool &)_capabilities_.produces_angular_velocity);
-        param_loader.loadParam("outputs/odometry", (bool &)_capabilities_.produces_odometry);
+        local_param_loader.loadParam("outputs/distance_sensor", (bool &)_capabilities_.produces_distance_sensor);
+        local_param_loader.loadParam("outputs/gnss", (bool &)_capabilities_.produces_gnss);
+        local_param_loader.loadParam("outputs/gnss_status", (bool &)_capabilities_.produces_gnss_status);
+        local_param_loader.loadParam("outputs/rtk", (bool &)_capabilities_.produces_rtk);
+        local_param_loader.loadParam("outputs/ground_truth", (bool &)_capabilities_.produces_ground_truth);
+        local_param_loader.loadParam("outputs/imu", (bool &)_capabilities_.produces_imu);
+        local_param_loader.loadParam("outputs/altitude", (bool &)_capabilities_.produces_altitude);
+        local_param_loader.loadParam("outputs/magnetometer_heading", (bool &)_capabilities_.produces_magnetometer_heading);
+        local_param_loader.loadParam("outputs/magnetic_field", (bool &)_capabilities_.produces_magnetic_field);
+        local_param_loader.loadParam("outputs/rc_channels", (bool &)_capabilities_.produces_rc_channels);
+        local_param_loader.loadParam("outputs/battery_state", (bool &)_capabilities_.produces_battery_state);
+        local_param_loader.loadParam("outputs/position", (bool &)_capabilities_.produces_position);
+        local_param_loader.loadParam("outputs/orientation", (bool &)_capabilities_.produces_orientation);
+        local_param_loader.loadParam("outputs/velocity", (bool &)_capabilities_.produces_velocity);
+        local_param_loader.loadParam("outputs/angular_velocity", (bool &)_capabilities_.produces_angular_velocity);
+        local_param_loader.loadParam("outputs/odometry", (bool &)_capabilities_.produces_odometry);
 
-        if (!param_loader.loadedSuccessfully())
+        if (!local_param_loader.loadedSuccessfully())
         {
             RCLCPP_ERROR(node_->get_logger(), "[MrsUavFcuApi]: Could not load all parameters!");
             rclcpp::shutdown();
@@ -655,8 +687,8 @@ namespace mrs_uav_fcu_api
         /*Init Serial api communication*/
         std::string serial_port;
         int baud_rate;
-        param_loader.loadParam("serial_port", serial_port);
-        param_loader.loadParam("baud_rate", baud_rate);
+        local_param_loader.loadParam("serial_port", serial_port);
+        local_param_loader.loadParam("baud_rate", baud_rate);
 
         ser_ = std::make_shared<SerialApi>(node_, serial_port, baud_rate);
         ser_->startReceiver();
@@ -665,7 +697,7 @@ namespace mrs_uav_fcu_api
         /*Init HITL binder*/
         if (_simulation_)
         {
-            hitl_binder_.Init(node_, ser_);
+            hitl_binder_.Init(node_, ser_, local_param_loader);
         }
 
         RCLCPP_INFO(node_->get_logger(),"[MrsUavFcuApi]: initialized");

@@ -309,10 +309,15 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
   param_loader.loadParam("publishers/magnetometer/enabled", pub_mag_enabled);
 
   param_loader.loadParam("publishers/imu_noise/enabled", pub_imu_noise_enabled);
-  param_loader.loadParam("publishers/odom_noise/enabled", pub_odom_noise_enabled);
-  param_loader.loadParam("publishers/rangefinder_noise/enabled", pub_imu_noise_enabled);
+  param_loader.loadParam("publishers/odometry_noise/enabled", pub_odom_noise_enabled);
+  param_loader.loadParam("publishers/rangefinder_noise/enabled", pub_rangefinder_noise_enabled);
   param_loader.loadParam("publishers/altitude_noise/enabled", pub_altitude_noise_enabled);
   param_loader.loadParam("publishers/magnetometer_noise/enabled", pub_mag_noise_enabled);
+
+  if (!param_loader.loadedSuccessfully()) {
+    RCLCPP_ERROR(node_->get_logger(), "failed to load all parameters");
+    rclcpp::shutdown();
+  }
 
   /*Sensor publishers*/
 
@@ -754,7 +759,7 @@ void UavSystemRos::publishRangefinder(const MultirotorModel::State &state, const
   if (time_stamp - range_last_stamp_ >= range_delay_)
   {
       range.range += range_noiseShaper_.iterate(range_gen_(gen));
-      ph_rangefinder_noise_->publish(range);
+      ph_rangefinder_noise_->publish(range); //segfault here
       range_last_stamp_ = time_stamp;
   }
 
