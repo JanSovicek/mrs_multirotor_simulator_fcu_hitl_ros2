@@ -61,6 +61,10 @@ def generate_launch_description():
             else_value=custom_config
     )
 
+    from launch.actions import LogInfo
+
+    ld.add_action(LogInfo(msg=[ "Resolved custom_config: ", custom_config ]))
+
     # #} end of custom_config
 
     # #{ use_sim_time
@@ -95,8 +99,8 @@ def generate_launch_description():
 
             ComposableNode(
 
-                package=pkg_name,
-                plugin='mrs_uav_fcu_api::MrsUavFcuApi',
+                package="mrs_uav_hw_api",
+                plugin='mrs_uav_hw_api::HwApiManager',
                 namespace=uav_name,
                 name='hw_api',
                 parameters=[
@@ -104,7 +108,7 @@ def generate_launch_description():
                     {"topic_prefix": ["/", uav_name]},
                     {"use_sim_time": use_sim_time},
                     {"configs": configs},
-                    {'custom_config': custom_config},
+                    {"custom_config": custom_config},
                 ],
 
                 remappings=[
