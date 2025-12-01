@@ -23,8 +23,8 @@ windows:
   - hitl:
       layout: tiled
       panes:
-        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ros2 launch mrs_multirotor_simulator hw_api.launch.py custom_config:=./custom_configs/hw_api.yaml
-        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ros2 topic echo /uav1/hw_api/rc_channels
+        - ros2 launch mrs_multirotor_simulator hw_api.launch.py custom_config:=./custom_configs/hw_api.yaml
+        - ros2 topic echo /uav1/hw_api/rc_channels
   - goto:
       layout: tiled
       panes:
@@ -32,9 +32,9 @@ windows:
   - juggler:
       layout: tiled
       panes:
-        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ros2 run plotjuggler plotjuggler 
+        - until ros2 topic list &>/dev/null; do sleep 0.2; done; ros2 run plotjuggler plotjuggler 
         #-l custom_configs/juggler-layout.xml # uncomment once custom config is added
   - rviz:
       layout: tiled
       panes:
-        - until ros2 topic echo /clock use_sim_time &>/dev/null; do sleep 0.2; done; ros2 run rviz2 rviz2 -d ./rviz.rviz
+        - ros2 run rviz2 rviz2 -d ./rviz.rviz

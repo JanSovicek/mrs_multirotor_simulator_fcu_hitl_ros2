@@ -1,40 +1,40 @@
+hw_interface_plugin: "mrs_uav_fcu_api::MrsUavFcuApi"
 
 plugin:
-  class: "mrs_uav_fcu_api::MrsUavFcuApi"
+  comms_timeout: 1.0          # Example value, adjust if needed
+  simulation: true            # True = simulation mode selected
 
-  input_mode:
-    actuators:             false
-    control_group:         false
-    attitude_rate:         true
-    attitude:              true
+  inputs:
+    actuators: false
+    control_group: false
+    attitude_rate: true
+    attitude: true
     acceleration_hdg_rate: false
-    acceleration_hdg:      false
-    velocity_hdg_rate:     false
-    velocity_hdg:          false
-    position:              false
-
+    acceleration_hdg: false
+    velocity_hdg_rate: false
+    velocity_hdg: false
+    position: false
     feedforward: true
 
   outputs:
-    distance_sensor:      true
-    gnss:                 true
-    rtk:                  true
-    imu:                  true
-    altitude:             true
+    distance_sensor: true
+    gnss: true
+    rtk: true
+    imu: true
+    altitude: true
     magnetometer_heading: true
-    rc_channels:          true
-    battery_state:        true
-    position:             true
-    orientation:          true
-    velocity:             true
-    angular_velocity:     true
-    odometry:             true
-    ground_truth:         true
-
-
+    magnetic_field: false       # Not in your original, added placeholder
+    rc_channels: true
+    battery_state: true
+    position: true
+    orientation: true
+    velocity: true
+    angular_velocity: true
+    odometry: true
+    ground_truth: true
 
   serial_port: "/dev/ttyUSB0"
   baud_rate: 2000000
 
   start_latitude: 15.2
-  start_longditude: 14.3
+  start_longitude: 14.3
