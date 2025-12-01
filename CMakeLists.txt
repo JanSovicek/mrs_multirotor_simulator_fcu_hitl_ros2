@@ -206,7 +206,7 @@ install(
 )
 
 # Tell pluginlib / ament where our plugin XML is (use this package name)
-pluginlib_export_plugin_description_file(${PROJECT_NAME} plugins.xml)
+pluginlib_export_plugin_description_file(mrs_uav_hw_api plugins.xml)
 
 ## --------------------------------------------------------------
 ## |                           install                          |
