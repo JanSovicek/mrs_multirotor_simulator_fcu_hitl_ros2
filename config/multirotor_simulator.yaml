@@ -121,7 +121,7 @@ individual_takeoff_platform:
   enabled: false
 
 start_latitude: 15.2
-start_longditude: 14.3
+start_longitude: 14.3
 
 
 imu_rate: 200.0 #[Hz]
