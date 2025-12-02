@@ -398,7 +398,7 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
 
   if (sub_actuators_cmd_enabled) {
     sh_actuator_cmd_ =
-        mrs_lib::SubscriberHandler<mrs_msgs::msg::HwApiActuatorCmd>(shopts, "~/" + _uav_name_ + "/actuators_cmd", &UavSystemRos::callbackActuatorCmd, this);
+        mrs_lib::SubscriberHandler<mrs_msgs::msg::HwApiActuatorCmd>(shopts, "/hitl_fcu/actuators_cmd", &UavSystemRos::callbackActuatorCmd, this);
   }
 
   if (sub_control_group_cmd_enabled) {
@@ -710,6 +710,8 @@ void UavSystemRos::publishIMU(const MultirotorModel::State &state, const double 
       imu_last_stamp_ = time_stamp;
 
       ph_imu_noise_->publish(imu);
+
+      RCLCPP_INFO(node_->get_logger(), "IMU_NOICE_published");
   }
 }
 

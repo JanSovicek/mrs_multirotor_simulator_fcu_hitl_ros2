@@ -126,14 +126,14 @@ namespace mrs_uav_fcu_api
         shopts.subscription_options.callback_group = cbgrp_subs_;
 
         /*Initialize subscribers*/
-        sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "hitl/imu", &hitl_binder::callbackIMU, this);
-        sh_odom_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "hitl/odom", &hitl_binder::callbackOdometry, this);
-        //sh_rangefinder_ = mrs_lib::SubscriberHandler<sensor_msgs::Range>(shopts, "hitl/rangefinder", &hitl_binder::callbackRangeFinder, this);
-        sh_altitude_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "hitl/altitude", &hitl_binder::callbackAltitude, this);
-        sh_mag_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField>(shopts, "hitl/magnetometer", &hitl_binder::callbackMag, this);
+        sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "/multirotor_simulator/uav1/imu_noise", &hitl_binder::callbackIMU, this);
+        sh_odom_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "/multirotor_simulator/uav1/odom_noise", &hitl_binder::callbackOdometry, this);
+        //sh_rangefinder_ = mrs_lib::SubscriberHandler<sensor_msgs::Range>(shopts, "/multirotor_simulator/uav1/rangefinder_noise", &hitl_binder::callbackRangeFinder, this);
+        sh_altitude_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "/multirotor_simulator/uav1/altitude_noise", &hitl_binder::callbackAltitude, this);
+        sh_mag_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField>(shopts, "/multirotor_simulator/uav1/magnetometer_noise", &hitl_binder::callbackMag, this);
 
         /*Initialize publishers*/
-        ph_actuator_cmd_ = mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd>(node_, "hitl/actuators_cmd");
+        ph_actuator_cmd_ = mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd>(node_, "/hitl_fcu/actuators_cmd");
 
         RCLCPP_INFO(node_->get_logger(),"Subscribers and Publishers initialized");
     };
@@ -174,6 +174,7 @@ namespace mrs_uav_fcu_api
 
         /*Send message*/
         ser_->sendPacket(out);
+        RCLCPP_INFO(node_->get_logger(), "IMU data sent to FCU");
     } /*//}*/ /*//}*/
 
     void hitl_binder::publishMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg, rclcpp::Time &sim_time)
@@ -337,6 +338,8 @@ namespace mrs_uav_fcu_api
         /*Publish Imu*/
         publishImu(msg, sim_time);
         notifyMsg.s.sensors.notifySensorData.imu = 1;
+        RCLCPP_INFO(node_->get_logger(), "IMU Callback called");
+
         RCLCPP_INFO_ONCE(node_->get_logger(),"[HITLBinder]: IMU CALLBACK called");
 
         notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
@@ -438,7 +441,7 @@ namespace mrs_uav_fcu_api
         {
             case UMSG_CONTROL:
             {
-                RCLCPP_INFO(node_->get_logger(), "received DSHOT MSG");
+                //RCLCPP_INFO(node_->get_logger(), "received DSHOT MSG");
 
                 switch (msg_type)
                 {    
@@ -1042,7 +1045,7 @@ namespace mrs_uav_fcu_api
         if (_capabilities_.produces_odometry)
         {
             RCLCPP_ERROR_ONCE(node_->get_logger(),"[ODOMETRY] not yet implemented");
-            // common_handlers_->publishers.publishOdometry(odom);
+            //common_handlers_->publishers.publishOdometry(odom);
         }
     }
 
