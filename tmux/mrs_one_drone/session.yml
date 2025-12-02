@@ -23,8 +23,7 @@ windows:
   - hw_api:
       layout: tiled
       panes:
-        - ros2 launch mrs_multirotor_simulator hw_api.launch.py
-          custom_config:=./config/hw_api.yaml
+        - ros2 launch mrs_multirotor_simulator hw_api.launch.py custom_config:=./config/hw_api.yaml
   - core:
       layout: tiled
       panes:
@@ -66,5 +65,5 @@ windows:
   - juggler:
       layout: tiled
       panes:
-        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; ros2 run plotjuggler plotjuggler
-        #- until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 2; rosbag record -a 
+        - ros2 run plotjuggler plotjuggler
+        #-rosbag record -a 

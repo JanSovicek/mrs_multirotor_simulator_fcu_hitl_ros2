@@ -1,35 +1,40 @@
-input_mode:
-  actuators:             false
-  control_group:         false
-  attitude_rate:         true
-  attitude:              true
-  acceleration_hdg_rate: false
-  acceleration_hdg:      false
-  velocity_hdg_rate:     false
-  velocity_hdg:          false
-  position:              false
-  feedforward: true
+hw_interface_plugin: "mrs_uav_fcu_api::MrsUavFcuApi"
 
-outputs:
-  distance_sensor:      false
-  gnss:                 true
-  rtk:                  false
-  imu:                  true
-  altitude:             true
-  magnetometer_heading: true
-  rc_channels:          true
-  battery_state:        true
-  position:             true
-  orientation:          true
-  velocity:             true
-  angular_velocity:     true
-  odometry:             false
-  ground_truth:         false
+plugin:
+  comms_timeout: 1.0          # Example value, adjust if needed
+  simulation: true            # True = simulation mode selected
 
+  inputs:
+    actuators:            false
+    control_group:        false
+    attitude_rate:        true
+    attitude:             true
+    acceleration_hdg_rate: false
+    acceleration_hdg:     false
+    velocity_hdg_rate:    false
+    velocity_hdg:         false
+    position:             false
+    feedforward:          true
 
+  outputs:
+    distance_sensor:      false
+    gnss:                 true
+    rtk:                  false
+    imu:                  true
+    altitude:             true
+    magnetometer_heading: true
+    #magnetic_field:      false       # Added placeholder, not in original sim
+    rc_channels:          true
+    battery_state:        true
+    position:             true
+    orientation:          true
+    velocity:             true
+    angular_velocity:     true
+    odometry:             false
+    ground_truth:         false
 
-serial_port: "/dev/ttyUSB0"
-baud_rate: 2000000
+  serial_port: "/dev/ttyUSB0"
+  baud_rate: 2000000
 
-start_latitude: 15.2
-start_longditude: 14.3
+  start_latitude: 15.2
+  start_longitude: 14.3
