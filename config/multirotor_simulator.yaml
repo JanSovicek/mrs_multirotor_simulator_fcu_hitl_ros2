@@ -1,8 +1,8 @@
 # the rate of stepping the simulation
-simulation_rate: 1000.0 # Hz
+simulation_rate: 200.0 # Hz (original was 1000 Hz, 200 Hz is selected to match IMU rate with FCU HITL attitude rate control)
 
 # the rate of publishing of /clock
-clock_rate:      1000.0 # Hz, should be >= simulation_rate, ideally in whole multiples of simulation_rate
+clock_rate:      2000.0 # Hz, should be >= simulation_rate, ideally in whole multiples of simulation_rate
 
 dynamic:
 
@@ -134,10 +134,10 @@ position_rate: 10.0 #[Hz]
 
 range_rate: 1.0 #[Hz]
 
-accel_stddev: 0.0 # [m/s^2] 
-accel_bias: 0.0 # [m/s^2]
+accel_stddev: 0.0217 # [m/s^2] (derived from ICM-42688-P datasheet RMS noice density 70 ug/√Hz and 1000 Hz imu rate) 
+accel_bias: 0.0 # [m/s^2] 
 
-gyro_stddev: 0.0 # [rad/s]
+gyro_stddev: 0.00155 # [rad/s] (derived from ICM-42688-P datasheet RMS noice density 2.8 mdps/√Hz and 1000 Hz imu rate)
 gyro_bias: 0.0 # [rad/s]
 
 altitude_stddev: 0.0 # [m]
