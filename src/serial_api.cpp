@@ -67,12 +67,14 @@ void SerialApi::calculateDelay(umsg_state_heartbeat_t heartbeat)
 
     rclcpp::Duration diff = rclcpp::Duration::from_nanoseconds((curr_time - start_time).nanoseconds() / 2);
 
+    /*syncTime_R is estimated time of HBT arrival at FCU side expressed in ROS time frame*/
     rclcpp::Time syncTime_R = start_time + diff;
+    /*syncTime_F is actual time of HBT arrival at FCU side expressed in FCU time frame*/
     uint32_t syncTime_F = heartbeat.timestamp_arrived;
 
     if (heartbeat.seq_num == sequential - 1)
     {
-        mrs_lib::set_mutexed(mutex_sync_result, std::make_tuple(syncTime_R, syncTime_F), sync_result);
+        mrs_lib::set_mutexed(mutex_sync_result, std::make_tuple(syncTime_R, syncTime_F), sync_result_);
 
         double time_difference = static_cast<double>((curr_time - start_time).nanoseconds()) / 1e6;
         RCLCPP_INFO(node_->get_logger(),"[SYNC] curr_time %ld ns, start time was %ld ns, computed delay is %.3f miliseconds", curr_time.nanoseconds(), start_time.nanoseconds(), time_difference);
@@ -85,8 +87,8 @@ void SerialApi::calculateDelay(umsg_state_heartbeat_t heartbeat)
 
 uint32_t SerialApi::RosToFcu(const rclcpp::Time &rosTime)
 {
-
-    auto [syncTime_R, syncTime_F] = mrs_lib::get_mutexed(mutex_sync_result, sync_result);
+    /*Get the last HBT arrival time at FCU side - in ROS time and FCU time*/
+    auto [syncTime_R, syncTime_F] = mrs_lib::get_mutexed(mutex_sync_result, sync_result_);
     int64_t diff = (rosTime.nanoseconds() - syncTime_R.nanoseconds()) / 1e6;
     int64_t new_stamp = diff + static_cast<int64_t>(syncTime_F);
     return static_cast<uint32_t>(new_stamp);
@@ -94,10 +96,13 @@ uint32_t SerialApi::RosToFcu(const rclcpp::Time &rosTime)
 
 rclcpp::Time SerialApi::FcuToRos(const uint32_t &FcuTime)
 {
-    auto [syncTime_R, syncTime_F] = mrs_lib::get_mutexed(mutex_sync_result, sync_result);
-    int64_t diff = (static_cast<int64_t>(FcuTime) - static_cast<int64_t>(syncTime_F)) * 1e6;
+    /*Get the last HBT arrival time at FCU side - in ROS time and FCU time*/
+    auto [syncTime_R, syncTime_F] = mrs_lib::get_mutexed(mutex_sync_result, sync_result_);
 
-    rclcpp::Duration diff_R = rclcpp::Duration::from_nanoseconds(diff);
+    /*Get the difference between the message timestamp and the last HBT timestamp*/
+    int64_t diff_F = (static_cast<int64_t>(FcuTime) - static_cast<int64_t>(syncTime_F)) * 1e6;
+    /*Convert to duration in seconds*/
+    rclcpp::Duration diff_R = rclcpp::Duration::from_nanoseconds(diff_F);
 
     return syncTime_R + diff_R;
 }

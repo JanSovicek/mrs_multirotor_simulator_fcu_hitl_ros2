@@ -42,7 +42,7 @@ private:
     rclcpp::Time sync_time_ROS_send;
     uint32_t sequence_number = 0;
     std::mutex mutex_sync_result;
-    std::tuple<rclcpp::Time, uint32_t> sync_result;
+    std::tuple<rclcpp::Time, uint32_t> sync_result_;
     std::atomic<bool> is_synced_ = false;
     rclcpp::TimerBase::SharedPtr timer_sync_;
     

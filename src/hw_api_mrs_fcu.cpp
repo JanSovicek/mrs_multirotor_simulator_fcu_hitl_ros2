@@ -522,6 +522,10 @@ namespace mrs_uav_fcu_api
 
         std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers_;
 
+        // | ---------------------- publishers ----------------------- |
+        // outside of common handlers because of HITL
+        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>   ph_position_fcu_;
+
         // | ---------------------- subscribers ----------------------- |
 
         //mrs_lib::SubscriberHandler<> sh_ground_truth_;
@@ -682,6 +686,9 @@ namespace mrs_uav_fcu_api
         }
 
         // | ----------------------- publishers ----------------------- |
+
+        //Added for time DEBUGGING
+        ph_position_fcu_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/HITL/FCU_position_raw_time");
 
         // | ----------------------- finish init ---------------------- |
 
@@ -1045,6 +1052,21 @@ namespace mrs_uav_fcu_api
             RCLCPP_ERROR_ONCE(node_->get_logger(),"[ODOMETRY] not yet implemented");
             //common_handlers_->publishers.publishOdometry(odom);
         }
+
+        //Added publisher for FCU time DEBUGING
+        //{    
+        geometry_msgs::msg::PointStamped position;
+        //Keep the time unchnaged
+        position.header.stamp = rclcpp::Time(static_cast<int64_t>(msg.timestamp)*1e6); // from ms to ns
+        position.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
+        geometry_msgs::msg::Point p;
+        p.x = msg.position[0];
+        p.y = msg.position[1];
+        p.z = msg.position[2];
+        position.point = p;
+        
+        ph_position_fcu_->publish(position);
+        //}
     }
 
     //}
