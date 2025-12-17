@@ -1,5 +1,5 @@
-simulation_rate: 900
-clock_rate: 900
+simulation_rate: 1000
+clock_rate: 2000
 
 frames:
   fcu:
