@@ -140,7 +140,7 @@ accel_bias: 0.0 # [m/s^2]
 gyro_stddev: 0.00155 # [rad/s] (derived from ICM-42688-P datasheet RMS noice density 2.8 mdps/√Hz and 1000 Hz imu rate)
 gyro_bias: 0.0 # [rad/s]
 
-altitude_stddev: 0.0 # [m]
+altitude_stddev: 0.3 # [m] (0.3 estimated from Michal Reiser data, 0.63m derived from LPS22HB datasheet RMS pressure noise 0.0075 hPa)
 altitude_bias: 0.0 # [m]
 
 mag_stddev: 0.0 # [degrees ?  ]
