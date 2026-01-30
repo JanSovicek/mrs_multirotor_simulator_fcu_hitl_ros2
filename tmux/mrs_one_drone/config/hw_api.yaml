@@ -33,7 +33,7 @@ plugin:
     odometry:             false
     ground_truth:         false
 
-  serial_port: "/dev/ttyUSB0"
+  serial_port: '/dev/ttyACM1'  # "/dev/ttyUSB0" original for FTDI
   baud_rate: 2000000
 
   start_latitude: 15.2

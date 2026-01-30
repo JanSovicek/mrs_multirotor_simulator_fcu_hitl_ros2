@@ -76,7 +76,7 @@ publishers:
     enabled: true
 
   imu_noise:
-    enabled: true
+    enabled: true  
 
   odometry_noise:
     enabled: true

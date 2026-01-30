@@ -121,40 +121,59 @@ bool SerialPort::connect(const std::string port, const int baudrate, const bool 
   newtio.c_cflag &= ~CSIZE;   // Only one stop bit
   newtio.c_cflag |= CS8;      // 8 bit word
 
+  newtio.c_cflag |= CREAD;   // Enable Receiver
+  newtio.c_cflag |= CLOCAL;  // Ignore Modem Control Lines (DCD) The driver ignores the physical pin state (DCD), assumes the connection is always "Local" and active, and happily processes the ASYNC_LOW_LATENCY timer interrupts every 1ms.
+
   newtio.c_iflag = 0;  // Raw output since no parity checking is done
   newtio.c_oflag = 0;  // Raw output
   newtio.c_lflag = 0;  // Raw input is unprocessed
 
-  // |  coppied from MAVROS to possibly fix the issue with arduino  |
-  newtio.c_iflag &= ~(IXOFF | IXON);
-  newtio.c_cflag &= ~CRTSCTS;
-  // | ----------------------------  ---------------------------- |
+  newtio.c_iflag &= ~(IXOFF | IXON); //Disables special characters (Ctrl+S / Ctrl+Q) used to pause and resume text scrolling in old terminals.
+  newtio.c_cflag &= ~CRTSCTS; //Tells Linux to ignore the RTS (Request to Send) and CTS (Clear to Send) signals.
 
-  newtio.c_cc[VTIME] = 0;  // Wait for up to VTIME*0.1s (1 decisecond), returning as soon as any data is received.
-  newtio.c_cc[VMIN]  = 0;
+  newtio.c_cc[VTIME] = 0; // No timeout (wait forever)
+  newtio.c_cc[VMIN]  = 1; // BLOCK until at least 1 byte is available
 
   tcflush(serial_port_fd_, TCIFLUSH);
   tcsetattr(serial_port_fd_, TCSANOW, &newtio);
 
-  setBlocking(serial_port_fd_, 0);
+  //setBlocking(serial_port_fd_, 0);
 
-  tcsetattr(serial_port_fd_, TCSANOW, &newtio);
+  //tcsetattr(serial_port_fd_, TCSANOW, &newtio);
+
+  // 4. ASSERT DTR & RTS 
+  // This tells the FCU: "I am ready, send data now."
+  int modem_bits = 0;
+  if (ioctl(serial_port_fd_, TIOCMGET, &modem_bits) == 0) 
+  {
+    modem_bits |= TIOCM_DTR; // Host Ready
+    modem_bits |= TIOCM_RTS; // Request To Send
+    ioctl(serial_port_fd_, TIOCMSET, &modem_bits);
+  }
 
  #if defined(__linux__)
   // Enable low latency mode on Linux
 {
 
-  struct serial_struct ser_info;
-  ioctl(serial_port_fd_, TIOCGSERIAL, &ser_info);
+  struct serial_struct serial_info;
 
-  ser_info.flags |= ASYNC_LOW_LATENCY;
-
-  ioctl(serial_port_fd_, TIOCSSERIAL, &ser_info);
-
+  if (ioctl(serial_port_fd_, TIOCGSERIAL, &serial_info) == 0) 
+  {
+      // Set the LOW_LATENCY flag
+      serial_info.flags |= ASYNC_LOW_LATENCY;
+      
+      if (ioctl(serial_port_fd_, TIOCSSERIAL, &serial_info) < 0) 
+      {
+          printf("[SerialPort]Failed to set ASYNC_LOW_LATENCY");
+      }
+      else
+      {
+          printf("[SerialPort]ASYNC_LOW_LATENCY set successfully");
+      }
+  }
 
 }
 #endif
-
 
 
   return true;

@@ -700,6 +700,7 @@ namespace mrs_uav_fcu_api
 
         ser_ = std::make_shared<SerialApi>(node_, serial_port, baud_rate);
         ser_->startReceiver();
+        //std::this_thread::sleep_for(std::chrono::milliseconds(5000));
         ser_->startSyncTimer();
 
         /*Init HITL binder*/
@@ -1597,6 +1598,8 @@ namespace mrs_uav_fcu_api
         {
             umsg_MessageToTransfer msg = ser_->waitForPacket();
             bool parsed = false;
+
+            //RCLCPP_INFO(node_->get_logger(),"[HWApi] Received message class %d and type %d", msg.s.msg_class, msg.s.msg_type);
             if (_simulation_)
             {
                 parsed = hitl_binder_.ParseMessage(msg) || ParseMessage(msg);
