@@ -699,8 +699,8 @@ namespace mrs_uav_fcu_api
         local_param_loader.loadParam("baud_rate", baud_rate);
 
         ser_ = std::make_shared<SerialApi>(node_, serial_port, baud_rate);
-        ser_->startReceiver();
-        //std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+        ser_->startSerialApiThreads();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         ser_->startSyncTimer();
 
         /*Init HITL binder*/

@@ -53,7 +53,6 @@ private:
     std::atomic<bool> is_synced_ = false;
     rclcpp::TimerBase::SharedPtr timer_sync_;
     
-    std::mutex serial_mutex_;
     SerialPort ser_;
     umsg_MessageToTransfer recvdMsg_;
 
@@ -83,6 +82,14 @@ private:
     std::mutex time_mutex_;
     uint32_t number_of_push_ = 0;
     uint32_t number_of_pop_ = 0;
+    uint32_t bytes_sent_ = 0;
+
+    rclcpp::Time last_packet_time_{0, 0, RCL_STEADY_TIME};
+    static constexpr uint32_t TIME_BETWEEN_PACKETS_US = 50;
+
+    std::deque<uint8_t> tx_queue_;
+    std::mutex tx_serial_mutex_;
+    std::thread tx_serial_thread_;
 
     rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
 
@@ -97,6 +104,7 @@ private:
     void ringBufferPush(uint8_t* chunk_buffer, uint32_t bytes_from_os);
     void pin_to_core(pthread_t thread, int core_id);
     void consumeBytesFromTimeQueue(uint32_t bytes_to_consume);
+    void TxThreadLoop(void);
 
 public:
     rclcpp::Node::SharedPtr node_;
@@ -106,7 +114,7 @@ public:
     SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int baudrate);
 
     bool isSynced();
-    void startReceiver();
+    void startSerialApiThreads();
     void startSyncTimer();
     umsg_MessageToTransfer waitForPacket();
     void sendPacket(umsg_MessageToTransfer &msg);

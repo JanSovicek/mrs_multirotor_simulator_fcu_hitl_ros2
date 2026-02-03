@@ -97,7 +97,7 @@ namespace mrs_fcu_hitl_binder
 
         // | ------------------------- methods ------------------------ |
 
-        std::shared_ptr<SerialApi> ser_api_;
+        //std::shared_ptr<SerialApi> ser_api_;
 
         std::shared_ptr<mrs_lib::TransformBroadcaster> tf_broadcaster_;
 
@@ -207,7 +207,7 @@ namespace mrs_fcu_hitl_binder
         //umsg_CRCInit();
         
         //ser_api_ = std::make_shared<SerialApi>(node_);
-        //ser_api_->startReceiver();
+        //ser_api_->startSerialApiThreads();
 
         is_initialized_ = true;
         RCLCPP_INFO(node_->get_logger(), "[FcuHitlBinder]: initialized");

@@ -77,7 +77,7 @@ void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, rclcpp
         mrs_lib::set_mutexed(mutex_sync_result, std::make_tuple(syncTime_R, syncTime_F), sync_result_);
 
         double time_difference = static_cast<double>((arrival_time_steady - start_time_steady).nanoseconds()) / 1e6;
-        RCLCPP_INFO(node_->get_logger(),"[SYNC] arrival_time %ld ns, start time was %ld ns, computed delay is %.3f miliseconds", arrival_time_steady.nanoseconds(), start_time_steady.nanoseconds(), time_difference);
+        RCLCPP_INFO(node_->get_logger(),"[SYNC] Sequence number: %u, arrival_time %ld ns, start time was %ld ns, computed delay is %.3f miliseconds", heartbeat.seq_num, arrival_time_steady.nanoseconds(), start_time_steady.nanoseconds(), time_difference);
     }
     else
     {
@@ -152,7 +152,7 @@ void SerialApi::timerSync()
     sendPacket(msg);
     mrs_lib::set_mutexed(mutex_sync_time, std::tuple(curr_time_simulation, curr_time_steady, sequential), std::forward_as_tuple(sync_time_simulation_ROS_send, sync_time_steady_clock_ROS_send, sequence_number));
 
-    RCLCPP_INFO(node_->get_logger(), "[SerialApi]: Sync time message sent");
+    RCLCPP_INFO(node_->get_logger(), "[SerialApi]: Sync time message sent, sequence number %u", msg.s.state.heartbeat_request.seq_num);
 
     return;
 }
@@ -169,7 +169,7 @@ void SerialApi::pin_to_core(pthread_t thread, int core_id)
     CPU_SET(core_id, &cpuset);
     pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 }
-void SerialApi::startReceiver()
+void SerialApi::startSerialApiThreads()
 {
     /*Allocate Memory (Heap)*/
     rx_ring_buffer_.resize(RX_BUFFER_SIZE);
@@ -179,6 +179,7 @@ void SerialApi::startReceiver()
     /*Create threads*/
     serReadThread_ = std::thread([this]{ this->SerialRead(); }); 
     recvThread_ = std::thread([this]{ this->Receiver(); });
+    tx_serial_thread_= std::thread([this]{ this->TxThreadLoop(); });
 
     /*Pin threads to different cores*/
     pin_to_core(serReadThread_.native_handle(), 2);
@@ -196,7 +197,6 @@ void SerialApi::startSyncTimer()
 
 umsg_MessageToTransfer SerialApi::waitForPacket()
 {
-
     q_lock_->aquire();
     umsg_MessageToTransfer msg = outQ_.front();
     outQ_.pop();
@@ -205,8 +205,44 @@ umsg_MessageToTransfer SerialApi::waitForPacket()
 
 void SerialApi::sendPacket(umsg_MessageToTransfer &msg)
 {
-    std::unique_lock lock(serial_mutex_);
-    ser_.sendCharArray(msg.raw, msg.s.len);
+    std::unique_lock lock(tx_serial_mutex_);
+    tx_queue_.insert(tx_queue_.end(), msg.raw, msg.raw + msg.s.len);
+}
+
+void SerialApi::TxThreadLoop(void) 
+{
+    std::vector<uint8_t> bulk_buffer;
+    bulk_buffer.reserve(512);
+
+    while (rclcpp::ok()) 
+    {
+        // Wait 100us to accumulate data. 
+        // This is SAFE now because we are sending ONE big packet, 
+        // so we don't care if the OS wakes us up slightly early or late.
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+
+        {
+            std::unique_lock lock(tx_serial_mutex_);
+            if (tx_queue_.empty()) continue;
+
+            // Move all queued data to a local buffer
+            bulk_buffer.assign(tx_queue_.begin(), tx_queue_.end());
+            tx_queue_.clear();
+        }
+
+        // Send as ONE massive USB transaction.
+        // The STM32 will receive 200+ bytes in ONE interrupt.
+        // No "Short Packet" disable until the very end.
+        uint8_t* raw_ptr = bulk_buffer.data();
+        size_t length = bulk_buffer.size();
+        ser_.sendCharArray(raw_ptr, length);
+
+        bytes_sent_ += length;
+        if(bytes_sent_%100 == 0)
+        {
+            RCLCPP_INFO(node_->get_logger(), "[SerialApi]: bytes_sent_: %u", bytes_sent_);
+        }
+    }
 }
 
 // Helper to calculate buffer fullness
