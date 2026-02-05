@@ -93,6 +93,11 @@ private:
 
     rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
 
+    static constexpr uint32_t SYNC_WINDOW_SIZE = 10;
+    std::deque<double> rtt_buffer_;
+    double filtered_delay_ms_ = -1.0; 
+    const double alpha = 0.2; // Smoothing factor (0.0 to 1.0)
+
     void initialize(const rclcpp::Node::SharedPtr& node);
     void timerSync();
     void calculateDelay(umsg_state_heartbeat_response_t heartbeat, rclcpp::Time arrival_time_steady);

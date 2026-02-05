@@ -61,28 +61,43 @@ SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int b
 
 void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, rclcpp::Time arrival_time_steady)
 {
-    // auto curr_time = mrs_lib::get_mutexed(mutex_sim_time_, sim_time_);
-    //auto curr_time = clock_->now();
     auto [start_time_sim, start_time_steady, sequential] = mrs_lib::get_mutexed(mutex_sync_time, sync_time_simulation_ROS_send, sync_time_steady_clock_ROS_send, sequence_number);
 
-    rclcpp::Duration diff = rclcpp::Duration::from_nanoseconds((arrival_time_steady - start_time_steady).nanoseconds() / 2);
+    // 1. Check sequence number validity
+    if (heartbeat.seq_num != sequential - 1) {
+        RCLCPP_ERROR(node_->get_logger(), "[SYNC] Mismatch! Got: %u, Expected: %u", heartbeat.seq_num, sequential - 1);
+        return;
+    }
 
-    /*syncTime_R is estimated time of HBT arrival at FCU side expressed in ROS time frame*/
-    rclcpp::Time syncTime_R = start_time_sim + diff;
-    /*syncTime_F is actual time of HBT arrival at FCU side expressed in FCU time frame*/
+    // 2. Calculate current RTT in milliseconds
+    double current_rtt_ms = static_cast<double>((arrival_time_steady - start_time_steady).nanoseconds()) / 1e6;
+
+    // 3. Update Sliding Window (last SYNC_WINDOW_SIZE)
+    rtt_buffer_.push_back(current_rtt_ms);
+    if (rtt_buffer_.size() > SYNC_WINDOW_SIZE) {
+        rtt_buffer_.pop_front();
+    }
+
+    // 4. Find the minimum in the window (the "best" link performance)
+    double min_rtt_ms = *std::min_element(rtt_buffer_.begin(), rtt_buffer_.end());
+
+    // 5. Apply Exponential Filter
+    if (filtered_delay_ms_ < 0) {
+        filtered_delay_ms_ = min_rtt_ms; // Initialize on first packet
+    } else {
+        filtered_delay_ms_ = (alpha * min_rtt_ms) + ((1.0 - alpha) * filtered_delay_ms_);
+    }
+
+    // 6. Use the filtered delay to calculate syncTime_R
+    // Divide by 2 to get one-way latency
+    rclcpp::Duration filtered_diff = rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(filtered_delay_ms_ * 1e6 / 2.0));
+    rclcpp::Time syncTime_R = start_time_sim + filtered_diff;
     uint32_t syncTime_F = heartbeat.timestamp_arrived;
 
-    if (heartbeat.seq_num == sequential - 1)
-    {
-        mrs_lib::set_mutexed(mutex_sync_result, std::make_tuple(syncTime_R, syncTime_F), sync_result_);
+    mrs_lib::set_mutexed(mutex_sync_result, std::make_tuple(syncTime_R, syncTime_F), sync_result_);
 
-        double time_difference = static_cast<double>((arrival_time_steady - start_time_steady).nanoseconds()) / 1e6;
-        RCLCPP_INFO(node_->get_logger(),"[SYNC] Sequence number: %u, arrival_time %ld ns, start time was %ld ns, computed delay is %.3f miliseconds", heartbeat.seq_num, arrival_time_steady.nanoseconds(), start_time_steady.nanoseconds(), time_difference);
-    }
-    else
-    {
-        RCLCPP_ERROR(node_->get_logger(), "[SYNC] NOT MATCHING SEQUENCE NUMBERS. Arrived heartbeat.seq_num: %u, but expected: %u", heartbeat.seq_num, sequential-1);
-    }
+    RCLCPP_INFO(node_->get_logger(), "[SYNC] Seq: %u | Curr RTT: %.2fms | Min Window: %.2fms | Filtered: %.2fms", 
+                heartbeat.seq_num, current_rtt_ms, min_rtt_ms, filtered_delay_ms_);
 }
 
 uint32_t SerialApi::RosToFcu(const rclcpp::Time &rosTime)
