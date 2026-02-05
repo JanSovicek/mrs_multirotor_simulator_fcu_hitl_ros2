@@ -192,7 +192,7 @@ void SerialApi::startSyncTimer()
 {
     using namespace std::chrono_literals;
 
-    timer_sync_ = node_->create_wall_timer(2s, std::bind(&SerialApi::timerSync, this));
+    timer_sync_ = node_->create_wall_timer(1s, std::bind(&SerialApi::timerSync, this));
 }
 
 umsg_MessageToTransfer SerialApi::waitForPacket()
@@ -221,6 +221,14 @@ void SerialApi::TxThreadLoop(void)
         // so we don't care if the OS wakes us up slightly early or late.
         std::this_thread::sleep_for(std::chrono::microseconds(100));
 
+        //if(bytes_sent_>=500000)
+        //{
+        //    RCLCPP_INFO_ONCE(node_->get_logger(), "[SerialApi]: bytes_sent_: %u", bytes_sent_);
+        //    std::unique_lock lock(tx_serial_mutex_);
+        //    tx_queue_.clear();
+        //    continue;
+        //}
+        //else
         {
             std::unique_lock lock(tx_serial_mutex_);
             if (tx_queue_.empty()) continue;
