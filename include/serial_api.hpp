@@ -8,14 +8,6 @@
 #include <mutex>
 #include <queue>
 
-enum ReceiverState
-{
-    WAITING_FOR_SYNC0,
-    WAITING_FOR_SYNC1,
-    WAITING_FOR_HEADER,
-    WAITING_FOR_PAYLOAD,
-    INVALID_MSG,
-};
 
 struct TimeStampEntry {
     uint32_t bytes_left;
@@ -58,7 +50,6 @@ private:
 
     std::unique_ptr<CountingSemaphore> q_lock_;
     std::queue<umsg_MessageToTransfer> outQ_;
-    ReceiverState state_ = WAITING_FOR_SYNC0;
 
     /*Ring buffer for storing received data*/
     static constexpr uint32_t RX_BUFFER_SIZE = 10*1024; /*10KB*/
@@ -83,6 +74,7 @@ private:
     uint32_t number_of_push_ = 0;
     uint32_t number_of_pop_ = 0;
     uint32_t bytes_sent_ = 0;
+    uint32_t bytes_received_ = 0;
 
     rclcpp::Time last_packet_time_{0, 0, RCL_STEADY_TIME};
     static constexpr uint32_t TIME_BETWEEN_PACKETS_US = 50;
@@ -99,17 +91,29 @@ private:
     const double alpha = 0.2; // Smoothing factor (0.0 to 1.0)
 
     void initialize(const rclcpp::Node::SharedPtr& node);
+
+    /*Time synchronisation functions*/
     void timerSync();
     void calculateDelay(umsg_state_heartbeat_response_t heartbeat, rclcpp::Time arrival_time_steady);
-    void SerialRead();
-    void Receiver();
-    uint32_t ringBufferFull();
-    uint32_t ringBufferFree();
-    bool ringBufferPop(uint32_t toRead);
-    void ringBufferPush(uint8_t* chunk_buffer, uint32_t bytes_from_os);
+
+    /*RIng bUffer functions*/
+    uint32_t    ringBufferFull();
+    uint32_t    ringBufferFree();
+    void        ringBufferPop(uint32_t toRead);
+    void        ringBufferPush(uint8_t* chunk_buffer, uint32_t bytes_from_os);
+    uint8_t*    ringBufferPeekPointer(uint32_t offset_from_tail);
+    uint32_t    ringBufferPeekUint32(uint32_t offset_from_tail);
+    uint8_t     ringBufferCalcCRC(uint32_t total_len);
+    void        ringBufferRemove(uint32_t bytes_to_remove);
+
+    void pushMsgToInternalQueue();
     void pin_to_core(pthread_t thread, int core_id);
     void consumeBytesFromTimeQueue(uint32_t bytes_to_consume);
-    void TxThreadLoop(void);
+
+    /*Thread running functions*/
+    void SerialRead();
+    void Parser();
+    void TxThreadLoop();
 
 public:
     rclcpp::Node::SharedPtr node_;
