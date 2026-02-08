@@ -59,7 +59,7 @@ SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int b
     umsg_CRCInit();
 }
 
-void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, rclcpp::Time arrival_time_steady)
+void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, const rclcpp::Time& arrival_time_steady)
 {
     auto [start_time_sim, start_time_steady, sequential] = mrs_lib::get_mutexed(mutex_sync_time, sync_time_simulation_ROS_send, sync_time_steady_clock_ROS_send, sequence_number);
 
@@ -188,7 +188,8 @@ void SerialApi::pin_to_core(pthread_t thread, int core_id)
 void SerialApi::startSerialApiThreads()
 {
     /*Allocate Memory (Heap)*/
-    rx_ring_buffer_.resize(RX_BUFFER_SIZE);
+    rx_data_ring_buffer_.resize(RX_BUFFER_SIZE);
+    rx_timestamp_ring_buffer_.resize(RX_BUFFER_SIZE);
 
     RCLCPP_INFO(node_->get_logger(), "[SerialApi]: rx_ring_buffer initialized");
     
@@ -366,7 +367,7 @@ uint32_t SerialApi::ringBufferFree()
     return FreeBytes;
 }
 
-void SerialApi::ringBufferPush(uint8_t* chunk_buffer, uint32_t bytes_from_os) 
+void SerialApi::ringBufferPush(uint8_t* chunk_buffer, const uint32_t bytes_from_os, const rclcpp::Time& arrival_timestamp_steady) 
 {
     /*Check space (Atomic Load happens inside ringBufferFree)*/
     uint32_t FreeSpace = ringBufferFree();
@@ -382,7 +383,9 @@ void SerialApi::ringBufferPush(uint8_t* chunk_buffer, uint32_t bytes_from_os)
         if (bytes_from_os <= space_until_wrap) 
         {
             /*No wrapping needed. Just one linear copy.*/
-            std::memcpy(&rx_ring_buffer_[head], chunk_buffer, bytes_from_os);
+            std::memcpy(&rx_data_ring_buffer_[head], chunk_buffer, bytes_from_os);
+            /*Fill in timestamp*/
+            std::fill_n( &rx_timestamp_ring_buffer_[head], bytes_from_os, arrival_timestamp_steady);
             
             /*Update local head variable*/
             head += bytes_from_os;
@@ -395,11 +398,13 @@ void SerialApi::ringBufferPush(uint8_t* chunk_buffer, uint32_t bytes_from_os)
             /*Wrapping needed. Two copies.*/
             
             /*Copy Part A: From current head to the end of the buffer*/
-            std::memcpy(&rx_ring_buffer_[head], chunk_buffer, space_until_wrap);
+            std::memcpy(&rx_data_ring_buffer_[head], chunk_buffer, space_until_wrap);
+            std::fill_n( &rx_timestamp_ring_buffer_[head], space_until_wrap, arrival_timestamp_steady);
             
             /*Copy Part B: The remaining bytes to the start of the buffer*/
             uint32_t remaining_bytes = bytes_from_os - space_until_wrap;
-            std::memcpy(&rx_ring_buffer_[0], &chunk_buffer[space_until_wrap], remaining_bytes);
+            std::memcpy(&rx_data_ring_buffer_[0], &chunk_buffer[space_until_wrap], remaining_bytes);
+            std::fill_n( &rx_timestamp_ring_buffer_[0], remaining_bytes, arrival_timestamp_steady);
             
             /*Update local head variable*/
             head = remaining_bytes;
@@ -428,16 +433,21 @@ void SerialApi::ringBufferPop(uint32_t toRead)
     if (toRead <= bytes_until_wrap) 
     {
         /*Linear copy (No wrap)*/
-        memcpy(&recvdMsg_.raw[0], &rx_ring_buffer_[current_tail], toRead);
+        memcpy(&recvdMsg_.raw[0], &rx_data_ring_buffer_[current_tail], toRead);
+        /*Get timestamp od last Msg byte*/
+        recvd_msg_time_ = rx_timestamp_ring_buffer_[current_tail+toRead-1];
+
         rx_tail_.store((current_tail + toRead) % RX_BUFFER_SIZE, std::memory_order_release);
     } 
     else 
     {
         /*Wrapped copy (Part 1: Tail to End, Part 2: Start to Rest)*/
-        memcpy(&recvdMsg_.raw[0], &rx_ring_buffer_[current_tail], bytes_until_wrap);
+        memcpy(&recvdMsg_.raw[0], &rx_data_ring_buffer_[current_tail], bytes_until_wrap);
         
         uint32_t remaining = toRead - bytes_until_wrap;
-        memcpy(&recvdMsg_.raw[bytes_until_wrap], &rx_ring_buffer_[0], remaining);
+        memcpy(&recvdMsg_.raw[bytes_until_wrap], &rx_data_ring_buffer_[0], remaining);
+        /*Get timestamp od last Msg byte*/
+        recvd_msg_time_ = rx_timestamp_ring_buffer_[remaining-1];
         
         rx_tail_.store(remaining, std::memory_order_release);
     }
@@ -445,39 +455,10 @@ void SerialApi::ringBufferPop(uint32_t toRead)
     return;
 }
 
-void SerialApi::consumeBytesFromTimeQueue(uint32_t bytes_to_consume)
-{
-    std::lock_guard<std::mutex> lock(time_mutex_);
-
-    while (bytes_to_consume > 0 && !time_queue_.empty())
-    {
-        // Reference the chunk at the front
-        auto& front_chunk = time_queue_.front();
-
-        if (bytes_to_consume >= front_chunk.bytes_left)
-        {
-            // Case 1: We consumed the whole chunk (and maybe more)
-            bytes_to_consume -= front_chunk.bytes_left;
-            time_queue_.pop_front();
-            number_of_pop_++;
-            if(number_of_pop_%2 == 0)
-            {
-                //RCLCPP_INFO(node_->get_logger(), "[SerialApi] Receiver: Number time queue pops: %u", number_of_pop_);
-            } 
-        }
-        else
-        {
-            // Case 2: We consumed only PART of the chunk
-            front_chunk.bytes_left -= bytes_to_consume;
-            bytes_to_consume = 0;
-        }
-    }
-}
-
 uint8_t* SerialApi::ringBufferPeekPointer(uint32_t offset_from_tail)
 {
     uint32_t current_tail = rx_tail_.load(std::memory_order_relaxed);
-    return &rx_ring_buffer_[(current_tail+offset_from_tail)%RX_BUFFER_SIZE];
+    return &rx_data_ring_buffer_[(current_tail+offset_from_tail)%RX_BUFFER_SIZE];
 }
 
 uint32_t SerialApi::ringBufferPeekUint32(uint32_t offset_from_tail) 
@@ -488,16 +469,16 @@ uint32_t SerialApi::ringBufferPeekUint32(uint32_t offset_from_tail)
     // FAST PATH: Data is contiguous (No wrap)
     // We check if the 4 bytes fit before the end of the physical array
     if (index + 4 <= RX_BUFFER_SIZE) {
-        memcpy(&value, &rx_ring_buffer_[index], 4); 
+        memcpy(&value, &rx_data_ring_buffer_[index], 4); 
     } 
     // SLOW PATH: Data wraps around the end
     else 
     {
         // Reconstruct byte-by-byte
-        uint8_t b0 = rx_ring_buffer_[index];
-        uint8_t b1 = rx_ring_buffer_[(index + 1) % RX_BUFFER_SIZE];
-        uint8_t b2 = rx_ring_buffer_[(index + 2) % RX_BUFFER_SIZE];
-        uint8_t b3 = rx_ring_buffer_[(index + 3) % RX_BUFFER_SIZE];
+        uint8_t b0 = rx_data_ring_buffer_[index];
+        uint8_t b1 = rx_data_ring_buffer_[(index + 1) % RX_BUFFER_SIZE];
+        uint8_t b2 = rx_data_ring_buffer_[(index + 2) % RX_BUFFER_SIZE];
+        uint8_t b3 = rx_data_ring_buffer_[(index + 3) % RX_BUFFER_SIZE];
 
         // Combine (Little Endian)
         value = (uint32_t)b0 | 
@@ -530,14 +511,14 @@ uint8_t SerialApi::ringBufferCalcCRC(uint32_t total_len)
 
   // Process the First Chunk
   // We pass '0' as the initial remainder for the start of the packet
-  crc = umsg_calcCRC_split(&rx_ring_buffer_[tail], chunk1_len, 0);
+  crc = umsg_calcCRC_split(&rx_data_ring_buffer_[tail], chunk1_len, 0);
 
   // Process the Wrap-Around Chunk (If needed)
   if (total_len > chunk1_len) 
   {
     uint32_t chunk2_len = total_len - chunk1_len;
     //Pass the 'crc' result from Step 1 as the 'remainder' input here
-    crc = umsg_calcCRC_split((&rx_ring_buffer_[0]), chunk2_len, crc);
+    crc = umsg_calcCRC_split((&rx_data_ring_buffer_[0]), chunk2_len, crc);
   }
 
   return crc;
@@ -558,9 +539,9 @@ void SerialApi::pushMsgToInternalQueue()
         /*Process heart beat and calculate time delay*/
         umsg_state_heartbeat_response_t beat = recvdMsg_.s.state.heartbeat_response;
 
-        rclcpp::Time current_packet_arrival_time = steady_clock_.now();
+        //rclcpp::Time current_packet_arrival_time = steady_clock_.now();
 
-        calculateDelay(beat, current_packet_arrival_time);
+        calculateDelay(beat, recvd_msg_time_);
         if (!is_synced_)
         {
             is_synced_ = true;
@@ -681,30 +662,17 @@ void SerialApi::SerialRead()
     {
         /*Blocking read*/
         uint32_t bytes_from_os = ser_.readSerial(chunk_buffer, CHUNK_BUFFER_SIZE);
-        auto t_arrival = steady_clock_.now();
+        auto arrival_time = steady_clock_.now();
 
         if(0 < bytes_from_os)
         {
-            ringBufferPush(chunk_buffer, bytes_from_os);
-            
-            /*Save time*/
-            {
-                std::lock_guard<std::mutex> lock(time_mutex_);
-                //if(time_queue_.size() > 1000*n)
-                //{
-                //    RCLCPP_ERROR(node_->get_logger(),"[SerialApi] time_queue_ size is larger than %d", 100*n);
-                //    n++;
-                //}
-                // Record: "These specific 'bytes_from_os' bytes arrived at 't_arrival'"
-                time_queue_.push_back({(uint32_t)bytes_from_os, t_arrival});
-                number_of_push_++;
-                bytes_received_ += bytes_from_os;
-                if(bytes_received_%2 == 0)
-                {
-                    RCLCPP_INFO(node_->get_logger(), "[SerialApi] SerialRead: bytes_received_: %u", bytes_received_);
-                } 
+            ringBufferPush(chunk_buffer, bytes_from_os, arrival_time);
+            bytes_received_ += bytes_from_os;
+            //if(bytes_received_%2 == 0)
+            //{
+            //    RCLCPP_INFO(node_->get_logger(), "[SerialApi] SerialRead: bytes_received_: %u", bytes_received_);
+            //} 
 
-            }
             /*Notify the parser*/
             {
                 cv_.notify_one();
