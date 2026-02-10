@@ -69,58 +69,91 @@ void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, const 
         return;
     }
 
-    // 2. Calculate current RTT in milliseconds
+    // 1. Get current snapshots of both clocks
+    rclcpp::Time now_sim = node_->now();           // Current Simulation Time
+    rclcpp::Time now_steady = rclcpp::Clock(RCL_STEADY_TIME).now(); // Current Wall/Kernel Time
+
+    // 2. Calculate how long ago the packet arrived (Processing Latency)
+    //    (e.g., Packet arrived 50us ago at the kernel)
+    rclcpp::Duration age_of_packet = now_steady - arrival_time_steady;
+
+    // 3. Project Simulation Time backwards to the arrival moment
+    //    "What was the Sim Time when the packet actually hit the UART?"
+    rclcpp::Time arrival_time_sim = now_sim - age_of_packet;
+
+    // 4. Calculate Raw RTT for THIS packet
     double current_rtt_ms = static_cast<double>((arrival_time_steady - start_time_steady).nanoseconds()) / 1e6;
 
-    // 3. Update Sliding Window (last SYNC_WINDOW_SIZE)
-    rtt_buffer_.push_back(current_rtt_ms);
-    if (rtt_buffer_.size() > SYNC_WINDOW_SIZE) {
-        rtt_buffer_.pop_front();
-    }
+    // 5. Gatekeeper: Is this a "Lucky Packet"?
+    // We only trust the time calculation if the RTT is close to the physical minimum.
+    // (You can maintain a simple min_rtt variable that slowly decays upwards to handle route changes)
+    if (current_rtt_ms < historical_min_rtt_) historical_min_rtt_ = current_rtt_ms;
 
-    // 4. Find the minimum in the window (the "best" link performance)
-    double min_rtt_ms = *std::min_element(rtt_buffer_.begin(), rtt_buffer_.end());
+    // Allow a small margin (e.g., 30% or 1ms) above the best-ever RTT
+    double acceptance_threshold = historical_min_rtt_ * 1.3; 
 
-    // 5. Apply Exponential Filter
-    if (filtered_delay_ms_ < 0) {
-        filtered_delay_ms_ = min_rtt_ms; // Initialize on first packet
+    if (current_rtt_ms <= acceptance_threshold) {
+
+        // 6. Calculate Offset relative to SIMULATION TIME
+        //    Offset = (Sim_Arrival) - (FCU_Time) - (One_Way_Delay)
+        // We assume One_Way_Delay is roughly RTT / 2
+        int64_t sim_ns = arrival_time_sim.nanoseconds();
+        int64_t fcu_ns = static_cast<int64_t>(heartbeat.timestamp_arrived) * 1000;
+        int64_t rtt_ns = static_cast<int64_t>(current_rtt_ms * 1e6);
+
+        int64_t raw_offset_ns = sim_ns - fcu_ns - (rtt_ns / 2);
+
+        if (!offset_initialized_.load()) {
+            smoothed_offset_ns_.store(raw_offset_ns);
+            offset_initialized_.store(true);
+        } else {
+            // Apply EWMA to the OFFSET
+            int64_t new_offset = static_cast<int64_t>((alpha * raw_offset_ns) + ((1.0 - alpha) * smoothed_offset_ns_.load()));
+            smoothed_offset_ns_.store(new_offset);
+        }
+        
+        RCLCPP_INFO(node_->get_logger(), "[SYNC] Seq: %u, Updated Offset: %ld ns | RTT: %.2f ms", heartbeat.seq_num, smoothed_offset_ns_.load(), current_rtt_ms);
+
     } else {
-        filtered_delay_ms_ = (alpha * min_rtt_ms) + ((1.0 - alpha) * filtered_delay_ms_);
+        RCLCPP_WARN(node_->get_logger(), "[SYNC] Seq: %u, Ignored Jittery Packet (RTT: %.2f > Limit: %.2f)", heartbeat.seq_num, current_rtt_ms, acceptance_threshold);
+        // We do NOT update smoothed_offset_ns_. We keep using the old stable one.
+    }
+}
+
+//Convert ROS Time -> FCU Time (e.g., for sending commands)
+uint64_t SerialApi::RosToFcu(const rclcpp::Time &rosTime)
+{
+    // Formula: T_fcu = T_ros - Offset
+    // We work in Nanoseconds to preserve precision, then convert to Micros at the end.
+    
+    int64_t ros_ns = rosTime.nanoseconds();
+    
+    // We subtract the smoothed offset (Sim - HW)
+    int64_t fcu_ns = ros_ns - smoothed_offset_ns_;
+    
+    // Convert Nanoseconds -> Microseconds (Divide by 1000)
+    uint64_t fcu_us = static_cast<uint64_t>(fcu_ns / 1000);
+    
+    return fcu_us; 
+}
+
+// Convert FCU Time -> ROS Time (e.g., for stamping motor command data)
+rclcpp::Time SerialApi::FcuToRos(const uint64_t &FcuTime_us)
+{
+    if (!offset_initialized_) {
+        return node_->now(); // Fallback if no sync yet
     }
 
-    // 6. Use the filtered delay to calculate syncTime_R
-    // Divide by 2 to get one-way latency
-    rclcpp::Duration filtered_diff = rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(filtered_delay_ms_ * 1e6 / 2.0));
-    rclcpp::Time syncTime_R = start_time_sim + filtered_diff;
-    uint32_t syncTime_F = heartbeat.timestamp_arrived;
-
-    mrs_lib::set_mutexed(mutex_sync_result, std::make_tuple(syncTime_R, syncTime_F), sync_result_);
-
-    RCLCPP_INFO(node_->get_logger(), "[SYNC] Seq: %u | Curr RTT: %.2fms | Min Window: %.2fms | Filtered: %.2fms", 
-                heartbeat.seq_num, current_rtt_ms, min_rtt_ms, filtered_delay_ms_);
-}
-
-uint32_t SerialApi::RosToFcu(const rclcpp::Time &rosTime)
-{
-    /*Get the last HBT arrival time at FCU side - in ROS time and FCU time*/
-    auto [syncTime_R, syncTime_F] = mrs_lib::get_mutexed(mutex_sync_result, sync_result_);
-    int64_t diff = (rosTime.nanoseconds() - syncTime_R.nanoseconds()) / 1e6;
-    int64_t new_stamp = diff + static_cast<int64_t>(syncTime_F);
-    return static_cast<uint32_t>(new_stamp);
-}
-
-rclcpp::Time SerialApi::FcuToRos(const uint32_t &FcuTime)
-{
-    /*Get the last HBT arrival time at FCU side - in ROS time and FCU time*/
-    auto [syncTime_R, syncTime_F] = mrs_lib::get_mutexed(mutex_sync_result, sync_result_);
-
-    /*Get the difference between the message timestamp and the last HBT timestamp*/
-    int64_t diff_F = (static_cast<int64_t>(FcuTime) - static_cast<int64_t>(syncTime_F)) * 1e6;
-    /*Convert to duration in seconds*/
-    rclcpp::Duration diff_R = rclcpp::Duration::from_nanoseconds(diff_F);
-
-    return syncTime_R + diff_R;
-    //return clock_->now();
+    // Formula: T_ros = T_fcu + Offset
+    
+    // 1. Convert Input (Micros) -> Nanoseconds
+    int64_t fcu_ns = static_cast<int64_t>(FcuTime_us) * 1000;
+    
+    // 2. Apply the Smoothed Offset
+    int64_t ros_ns = fcu_ns + smoothed_offset_ns_;
+    
+    // 3. Return as ROS Time
+    return rclcpp::Time(ros_ns, RCL_STEADY_TIME);
 }
 
 void SerialApi::timerSync()
@@ -174,7 +207,7 @@ void SerialApi::timerSync()
 
 bool SerialApi::isSynced()
 {
-    return is_synced_;
+    return offset_initialized_.load();
 }
 
 void SerialApi::pin_to_core(pthread_t thread, int core_id) 
@@ -542,10 +575,6 @@ void SerialApi::pushMsgToInternalQueue()
         //rclcpp::Time current_packet_arrival_time = steady_clock_.now();
 
         calculateDelay(beat, recvd_msg_time_);
-        if (!is_synced_)
-        {
-            is_synced_ = true;
-        }
     }
     else if (recvdMsg_.s.msg_class == UMSG_STATE && recvdMsg_.s.msg_type == STATE_HEARTBEAT_REQUEST)
     {

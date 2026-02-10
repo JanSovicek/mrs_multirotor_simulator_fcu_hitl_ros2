@@ -40,9 +40,6 @@ private:
     rclcpp::Time sync_time_simulation_ROS_send;
     rclcpp::Time sync_time_steady_clock_ROS_send;
     uint32_t sequence_number = 0;
-    std::mutex mutex_sync_result;
-    std::tuple<rclcpp::Time, uint32_t> sync_result_; /*Ros simulation time sync result, FCU time*/
-    std::atomic<bool> is_synced_ = false;
     rclcpp::TimerBase::SharedPtr timer_sync_;
     
     SerialPort ser_;
@@ -84,8 +81,12 @@ private:
 
     static constexpr uint32_t SYNC_WINDOW_SIZE = 10;
     std::deque<double> rtt_buffer_;
-    double filtered_delay_ms_ = -1.0; 
-    const double alpha = 0.2; // Smoothing factor (0.0 to 1.0)
+    double filtered_delay_ms_ = -1.0;
+
+    const double alpha = 0.1; // Smoothing factor (0.0 to 1.0)
+    double historical_min_rtt_ = 9999.0;
+    std::atomic<int64_t> smoothed_offset_ns_{0};
+    std::atomic<bool> offset_initialized_{false};
 
     void initialize(const rclcpp::Node::SharedPtr& node);
 
@@ -105,7 +106,6 @@ private:
 
     void pushMsgToInternalQueue();
     void pin_to_core(pthread_t thread, int core_id);
-    void consumeBytesFromTimeQueue(uint32_t bytes_to_consume);
 
     /*Thread running functions*/
     void SerialRead();
@@ -124,6 +124,6 @@ public:
     void startSyncTimer();
     umsg_MessageToTransfer waitForPacket();
     void sendPacket(umsg_MessageToTransfer &msg);
-    uint32_t RosToFcu(const rclcpp::Time &rosTime);
-    rclcpp::Time FcuToRos(const uint32_t &FcuTime);
+    uint64_t RosToFcu(const rclcpp::Time &rosTime);
+    rclcpp::Time FcuToRos(const uint64_t &FcuTime);
 };
