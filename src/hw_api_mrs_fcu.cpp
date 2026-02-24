@@ -49,6 +49,9 @@
 #define PWM_DEADBAND 200
 #define PWM_RANGE PWM_MAX - PWM_MIN
 
+/*Start X and Y position to be shared across hitl_binder(PC->FCU) and MrsUavFcuApi(FCU->PC)*/
+static double startX, startY;
+
 //}
 
 namespace mrs_uav_fcu_api
@@ -58,7 +61,6 @@ namespace mrs_uav_fcu_api
     private:
         std::shared_ptr<SerialApi> ser_;
         rclcpp::Node::SharedPtr node_;
-        double startX, startY;
         std::string UTM_zone;
 
         rclcpp::CallbackGroup::SharedPtr cbgrp_subs_;
@@ -259,9 +261,16 @@ namespace mrs_uav_fcu_api
         out.s.sensors.gps.DataValid = 1;
         out.s.sensors.gps.gnssFixOk = 1;
 
-        out.s.sensors.gps.vel[0] = 0;
-        out.s.sensors.gps.vel[1] = 0;
-        out.s.sensors.gps.vel[2] = 0;
+        //Eigen::Vector3d vel_body = Eigen::Vector3d(msg->twist.twist.linear.x, msg->twist.twist.linear.y, msg->twist.twist.linear.z);
+        //Eigen::Quaternion<double> q = Eigen::Quaternion<double>(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
+        //Eigen::Matrix3d R = q.toRotationMatrix();
+        //Eigen::Vector3d vel_world = R * vel_body;
+
+        // Note: GPS velocity is typically in the body frame, but here we are sending world frame velocity to replicate GPS velocity noise, which is independent of the drone's orientation
+        // GPS velocity format is NED (north, east, down), hence the negation of Z component
+        out.s.sensors.gps.vel[0] = msg->twist.twist.linear.y;
+        out.s.sensors.gps.vel[1] = msg->twist.twist.linear.x;
+        out.s.sensors.gps.vel[2] = -msg->twist.twist.linear.z;
 
         /*Set message length and CRC*/
         uint32_t len = UMSG_HEADER_SIZE;
@@ -580,8 +589,12 @@ namespace mrs_uav_fcu_api
         std::atomic<bool> armed_ = false;
         std::atomic<bool> connected_ = false;
         std::mutex mutex_status_;
-        Eigen::Matrix3d R_orientation;
-        std::string uav_name;
+
+        std::mutex odometry_mutex_;
+        Eigen::Matrix3d R_orientation_;
+        std::atomic<bool> orientation_initialized_ = false;
+        std::string uav_name_;
+        nav_msgs::msg::Odometry odometry_drone_est_;
     };
 
     //}
@@ -1028,36 +1041,68 @@ namespace mrs_uav_fcu_api
 
         // | -------------------- publish velocity -------------------- |
 
-        if (_capabilities_.produces_velocity)
+        if(orientation_initialized_)
         {
+            nav_msgs::msg::Odometry odom;
+            Eigen::Matrix3d R_orientation;
+            
+            { // Optain orination matrix along with angluar velocity in body frame to ensure orientation consistency between angular and linear velocity
+                
+                std::scoped_lock lock(odometry_mutex_);
+                R_orientation = R_orientation_;
 
-            geometry_msgs::msg::Vector3Stamped velocity;
-
-            velocity.header.stamp = ser_->FcuToRos(msg.timestamp);
-            //  TODO FIX : you have to
-            velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
+                odom.twist.twist.angular.x = odometry_drone_est_.twist.twist.angular.x;
+                odom.twist.twist.angular.y = odometry_drone_est_.twist.twist.angular.y;
+                odom.twist.twist.angular.z = odometry_drone_est_.twist.twist.angular.z;
+            }
             Eigen::Vector3d vel_world(msg.velocity);
-            Eigen::Vector3d vel_body = R_orientation * vel_world;
-            velocity.vector.x = vel_body.x();
-            velocity.vector.y = vel_body.y();
-            velocity.vector.z = vel_body.z();
+            Eigen::Vector3d vel_body = R_orientation.transpose() * vel_world;
 
-            common_handlers_->publishers.publishVelocity(velocity);
+            if (_capabilities_.produces_velocity)
+            {
+                geometry_msgs::msg::Vector3Stamped velocity;
+
+                velocity.header.stamp = ser_->FcuToRos(msg.timestamp);
+                //  TODO FIX : you have to
+                velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
+
+                velocity.vector.x = vel_body.x();
+                velocity.vector.y = vel_body.y();
+                velocity.vector.z = vel_body.z();
+                
+                common_handlers_->publishers.publishVelocity(velocity);
+            }
+
+            // | -------------------- publish odometry -------------------- |
+
+            if (_capabilities_.produces_odometry)
+            {
+                RCLCPP_ERROR_ONCE(node_->get_logger(),"[ODOMETRY] not yet implemented");
+                nav_msgs::msg::Odometry odom;
+
+                odom.header.stamp    = ser_->FcuToRos(msg.timestamp);
+                odom.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
+                //odom.child_frame_id  = _frame_fcu_;
+
+                /*Get orientatiom matrix (Drone -> world)*/
+                odom.pose.pose.orientation = mrs_lib::AttitudeConverter(R_orientation);
+                /*Get linear velocity in body frame*/
+                odom.twist.twist.linear.x = vel_body.x();
+                odom.twist.twist.linear.y = vel_body.y();
+                odom.twist.twist.linear.z = vel_body.z();
+                
+                /*Get position in world frame*/
+                odom.pose.pose.position.x = msg.position[0];// - startX;
+                odom.pose.pose.position.y = msg.position[1];// - startY;
+                odom.pose.pose.position.z = msg.position[2];
+
+                common_handlers_->publishers.publishOdometry(odom);
+            }
         }
-
-        // | ---------------- publish angular velocity ---------------- |
-        // | -------------------- publish odometry -------------------- |
-
-        if (_capabilities_.produces_odometry)
-        {
-            RCLCPP_ERROR_ONCE(node_->get_logger(),"[ODOMETRY] not yet implemented");
-            //common_handlers_->publishers.publishOdometry(odom);
-        }
-
         //Added publisher for FCU time DEBUGING
         //{    
         geometry_msgs::msg::PointStamped position;
-        //Keep the time unchnaged
+        //Keep the time unchanged
         position.header.stamp = rclcpp::Time(static_cast<int64_t>(msg.timestamp)*1e6); // from ms to ns
         position.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
         geometry_msgs::msg::Point p;
@@ -1304,6 +1349,26 @@ namespace mrs_uav_fcu_api
 
     void MrsUavFcuApi::publishAttitude(const umsg_estimation_attitude_t &msg)
     {
+        if (!is_initialized_)
+        {
+            return;
+        }
+
+        /*----Calculate Rotation matrix and save angular velocity----*/
+        Eigen::Quaternion<double> q = Eigen::Quaternion<float>(msg.w, msg.x, msg.y, msg.z).cast<double>();
+        q.normalize();
+        Eigen::Matrix3d R = q.toRotationMatrix();
+        {
+            std::scoped_lock lock(odometry_mutex_);
+            R_orientation_ = R;
+
+            odometry_drone_est_.twist.twist.angular.x = static_cast<double>(msg.att_rate[0]);
+            odometry_drone_est_.twist.twist.angular.y = static_cast<double>(msg.att_rate[1]);
+            odometry_drone_est_.twist.twist.angular.z = static_cast<double>(msg.att_rate[2]);
+        }
+        orientation_initialized_ = true;
+
+        /*----Publish orientation ----*/
         if (_capabilities_.produces_orientation)
         {
 
@@ -1323,6 +1388,7 @@ namespace mrs_uav_fcu_api
             common_handlers_->publishers.publishOrientation(orientation);
         }
 
+        /*---- Publish angular velocity ----*/
         if (_capabilities_.produces_angular_velocity)
         {
 
@@ -1568,10 +1634,7 @@ namespace mrs_uav_fcu_api
             {
             case ESTIMATION_ATTITUDE:
             {
-                umsg_estimation_attitude_t att = msg.s.estimation.attitude;
-                Eigen::Quaternion<double> q = Eigen::Quaternion<float>(att.w, att.x, att.y, att.z).cast<double>();
-                R_orientation = q.toRotationMatrix();
-                publishAttitude(att);
+                publishAttitude(msg.s.estimation.attitude);
             }
             break;
             case ESTIMATION_POSITION:

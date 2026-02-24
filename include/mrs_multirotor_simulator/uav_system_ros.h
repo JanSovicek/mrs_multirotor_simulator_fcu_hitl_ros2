@@ -175,11 +175,14 @@ private:
 
   // | ------------------------- noise parameters ------------------------- |
     std::mt19937 gen;
-    std::normal_distribution<double> accel_gen_;
+    std::normal_distribution<double> accel_xy_gen_;
+    std::normal_distribution<double> accel_z_gen_;
     std::normal_distribution<double> gyro_gen_;
     std::normal_distribution<double> mag_gen_;
     std::normal_distribution<double> altitude_gen_;
     std::normal_distribution<double> position_gen_;
+    std::normal_distribution<double> velocity_xy_gen_;
+    std::normal_distribution<double> velocity_z_gen_; 
     std::normal_distribution<double> range_gen_;
 
     std::vector<mrs_lib::IirFilter> accel_noiseShapers_;

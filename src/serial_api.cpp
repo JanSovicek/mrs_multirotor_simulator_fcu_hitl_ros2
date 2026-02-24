@@ -246,14 +246,14 @@ void SerialApi::TxThreadLoop()
         //    continue;
         //}
         //else
-        {
+        //{
             std::unique_lock lock(tx_serial_mutex_);
             if (tx_queue_.empty()) continue;
 
             // Move all queued data to a local buffer
             bulk_buffer.assign(tx_queue_.begin(), tx_queue_.end());
             tx_queue_.clear();
-        }
+        //}
 
         // Send as ONE massive USB transaction.
         // The STM32 will receive 200+ bytes in ONE interrupt.
