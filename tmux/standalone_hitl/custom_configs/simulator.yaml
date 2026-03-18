@@ -10,9 +10,5 @@ uav1:
     z: 0.0
     heading: 0.0
 
-serial_port: '/dev/ttyACM1' #"/dev/ttyUSB0" for UART over FTDI" ttyACM0
-baud_rate: 2000000
-
-
 start_latitude: 15.2
 start_longitude: 14.3

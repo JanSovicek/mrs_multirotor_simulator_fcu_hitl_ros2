@@ -707,11 +707,13 @@ namespace mrs_uav_fcu_api
 
         /*Init Serial api communication*/
         std::string serial_port;
+        std::string serial_port_back_up;
         int baud_rate;
         local_param_loader.loadParam("serial_port", serial_port);
+        local_param_loader.loadParam("serial_port_back_up", serial_port_back_up);
         local_param_loader.loadParam("baud_rate", baud_rate);
 
-        ser_ = std::make_shared<SerialApi>(node_, serial_port, baud_rate);
+        ser_ = std::make_shared<SerialApi>(node_, serial_port, serial_port_back_up, baud_rate);
         ser_->startSerialApiThreads();
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         ser_->startSyncTimer();

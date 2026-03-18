@@ -46,14 +46,19 @@ SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node)
     this->initialize(node);
 }
 
-SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int baudrate)
+SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev1, std::string dev2, int baudrate)
 {
     this->initialize(node);
 
-    if (!ser_.connect(dev, baudrate, false))
+    if (!ser_.connect(dev1, baudrate, false))
     {
-        RCLCPP_ERROR(node_->get_logger(),"could not open serial port");
-        return;
+        RCLCPP_ERROR(node_->get_logger(),"could not open serial port %s", dev1.c_str());
+
+        if (!ser_.connect(dev2, baudrate, false))
+        {
+            RCLCPP_ERROR(node_->get_logger(),"could not open serial port %s", dev2.c_str());
+            return;
+        }
     }
     q_lock_ = std::make_unique<CountingSemaphore>(max_packets_in_q);
     umsg_CRCInit();
