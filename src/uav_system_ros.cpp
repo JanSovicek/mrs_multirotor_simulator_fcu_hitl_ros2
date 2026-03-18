@@ -179,10 +179,18 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
   double bias = 0;
   double stddev = 0;
 
-  // accel
-  param_loader.loadParam("accel_bias", bias);
-  param_loader.loadParam("accel_stddev", stddev);
-  accel_gen_ = std::normal_distribution<double>(bias, stddev);
+  // accel xy noise
+  param_loader.loadParam("accel_xy_bias", bias);
+  param_loader.loadParam("accel_xy_stddev", stddev);
+  accel_xy_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  bias = 0;
+  stddev = 0;
+
+  // accel z noise
+  param_loader.loadParam("accel_z_bias", bias);
+  param_loader.loadParam("accel_z_stddev", stddev);
+  accel_z_gen_ = std::normal_distribution<double>(bias, stddev);
 
   // gyro
   param_loader.loadParam("gyro_bias", bias);
@@ -204,10 +212,19 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
   param_loader.loadParam("pos_stddev", stddev);
   position_gen_ = std::normal_distribution<double>(bias, stddev);
 
+  // velocity
+  param_loader.loadParam("vel_xy_bias", bias);
+  param_loader.loadParam("vel_xy_stddev", stddev);
+  velocity_xy_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  // velocity
+  param_loader.loadParam("vel_z_bias", bias);
+  param_loader.loadParam("vel_z_stddev", stddev);
+  velocity_z_gen_ = std::normal_distribution<double>(bias, stddev);
+
   // range
   param_loader.loadParam("range_bias", bias);
   param_loader.loadParam("range_stddev", stddev);
-
   range_gen_ = std::normal_distribution<double>(bias, stddev);
 
   // load the filters into std vector
@@ -634,6 +651,11 @@ void UavSystemRos::publishOdometry(const MultirotorModel::State &state, const do
   // add the noise
   if (time_stamp - position_last_stamp_ >= position_delay_)
   {
+      // Use world frame velocity for noise addition, to truly replicate GSP velocity noise, which is independent of the drone's orientation
+      odom.twist.twist.linear.x = state.v(0) + velocity_xy_gen_(gen);
+      odom.twist.twist.linear.y = state.v(1) + velocity_xy_gen_(gen);
+      odom.twist.twist.linear.z = state.v(2) + velocity_z_gen_(gen);
+
       odom.pose.pose.position.x += position_noiseShapers_.at(0).iterate(position_gen_(gen));
       odom.pose.pose.position.y += position_noiseShapers_.at(1).iterate(position_gen_(gen));
       odom.pose.pose.position.z += position_noiseShapers_.at(2).iterate(position_gen_(gen));
@@ -703,9 +725,9 @@ void UavSystemRos::publishIMU(const MultirotorModel::State &state, const double 
       imu.angular_velocity.y += gyro_noiseShapers_.at(1).iterate(gyro_gen_(gen));
       imu.angular_velocity.z += gyro_noiseShapers_.at(2).iterate(gyro_gen_(gen));
 
-      imu.linear_acceleration.x += accel_noiseShapers_.at(0).iterate(accel_gen_(gen));
-      imu.linear_acceleration.y += accel_noiseShapers_.at(1).iterate(accel_gen_(gen));
-      imu.linear_acceleration.z += accel_noiseShapers_.at(2).iterate(accel_gen_(gen));
+      imu.linear_acceleration.x += accel_noiseShapers_.at(1).iterate(accel_xy_gen_(gen));
+      imu.linear_acceleration.y += accel_noiseShapers_.at(0).iterate(accel_xy_gen_(gen));
+      imu.linear_acceleration.z += accel_noiseShapers_.at(2).iterate(accel_z_gen_(gen));
 
       imu_last_stamp_ = time_stamp;
 

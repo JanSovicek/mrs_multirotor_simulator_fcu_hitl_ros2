@@ -113,26 +113,42 @@ bool SerialPort::connect(const std::string port, const int baudrate, const bool 
       return false;
   }
 
-  cfsetispeed(&newtio, baudrate_set);  // Input port speed
-  cfsetospeed(&newtio, baudrate_set);  // Output port speed
 
-  newtio.c_cflag &= ~PARENB;  // no parity bit
-  newtio.c_cflag &= ~CSTOPB;  // 1 stop bit
-  newtio.c_cflag &= ~CSIZE;   // Only one stop bit
-  newtio.c_cflag |= CS8;      // 8 bit word
+  //Set Baudrate
+  cfsetispeed(&newtio, baudrate_set);
+  cfsetospeed(&newtio, baudrate_set);
 
-  newtio.c_cflag |= CREAD;   // Enable Receiver
-  newtio.c_cflag |= CLOCAL;  // Ignore Modem Control Lines (DCD) The driver ignores the physical pin state (DCD), assumes the connection is always "Local" and active, and happily processes the ASYNC_LOW_LATENCY timer interrupts every 1ms.
+  //newtio.c_cflag &= ~PARENB;  // no parity bit
+  //newtio.c_cflag &= ~CSTOPB;  // 1 stop bit
+  //newtio.c_cflag &= ~CSIZE;   // Only one stop bit
+  //newtio.c_cflag |= CS8;      // 8 bit word
+  //
+  //newtio.c_cflag |= CREAD;   // Enable Receiver
+  //newtio.c_cflag |= CLOCAL;  // Ignore Modem Control Lines (DCD) The driver ignores the physical pin state (DCD), assumes the connection is always "Local" and active, and happily processes the ASYNC_LOW_LATENCY timer interrupts every 1ms.
+  //
+  //newtio.c_iflag = 0;  // Raw output since no parity checking is done
+  //newtio.c_oflag = 0;  // Raw output
+  //newtio.c_lflag = 0;  // Raw input is unprocessed
+  //
+  //newtio.c_iflag &= ~(IXOFF | IXON); //Disables special characters (Ctrl+S / Ctrl+Q) used to pause and resume text scrolling in old terminals.
+  //newtio.c_cflag &= ~CRTSCTS; //Tells Linux to ignore the RTS (Request to Send) and CTS (Clear to Send) signals.
 
-  newtio.c_iflag = 0;  // Raw output since no parity checking is done
-  newtio.c_oflag = 0;  // Raw output
-  newtio.c_lflag = 0;  // Raw input is unprocessed
 
-  newtio.c_iflag &= ~(IXOFF | IXON); //Disables special characters (Ctrl+S / Ctrl+Q) used to pause and resume text scrolling in old terminals.
-  newtio.c_cflag &= ~CRTSCTS; //Tells Linux to ignore the RTS (Request to Send) and CTS (Clear to Send) signals.
+  //Initialize with standard RAW mode (The "Sledgehammer")
+  // This disables: ECHO, ICANON (Canonical mode), ISIG (Signals), 
+  // IEXTEN (Extended processing), and clears most processing flags.
+  cfmakeraw(&newtio);
 
-  newtio.c_cc[VTIME] = 0; // No timeout (wait forever)
-  newtio.c_cc[VMIN]  = 1; // BLOCK until at least 1 byte is available
+  //Hardware Settings (Crucial for physical hardware)
+  newtio.c_cflag |= (CLOCAL | CREAD); // Ignore modem lines + Enable Receiver
+  newtio.c_cflag &= ~CSTOPB;          // 1 Stop bit
+  newtio.c_cflag &= ~CRTSCTS;         // Disable Hardware Flow Control (RTS/CTS)
+
+  //Blocking Read Settings (Keep your existing logic)
+  // VMIN = 1: Read call blocks until at least 1 byte is available
+  // VTIME = 0: No inter-character timeout (wait forever)
+  newtio.c_cc[VMIN]  = 1;
+  newtio.c_cc[VTIME] = 0;
 
   tcflush(serial_port_fd_, TCIFLUSH);
   tcsetattr(serial_port_fd_, TCSANOW, &newtio);
