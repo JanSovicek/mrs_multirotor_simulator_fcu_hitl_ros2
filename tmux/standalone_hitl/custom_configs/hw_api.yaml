@@ -33,7 +33,20 @@ plugin:
     odometry: true
     ground_truth: true
 
-  serial_port: '/dev/serial/by-id/usb-MRS_FCU_com_port_324F36723431-if00'  # "/dev/ttyUSB0" original for FTDI, other names for USB /dev/ttyACM1 or /dev/ttyACM0
+
+  #Generic ID defined by FCU_cm_port
+  #----------------------------------
+  #need to create file: sudo vim /etc/udev/rules.d/99-mrs-fcu.rules
+  #then add rule: SUBSYSTEM=="tty", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5740", ATTRS{product}=="FCU_com_port", SYMLINK+="mrs_fcu", MODE="0666", ENV{ID_MM_DEVICE_IGNORE}="1"
+  #reload riles with: sudo udevadm control --reload-rules, sudo udevadm trigger
+  #verify: ls -l /dev/ttyACM*
+  #identify available port product: udevadm info -a -n /dev/ttyACM0 | grep 'product'  
+  serial_port: '/dev/mrs_fcu'
+
+  #Silicon specific ID
+  #---------------------------------
+  #serial_port: '/dev/serial/by-id/usb-MRS_FCU_com_port_324F36723431-if00'  # "/dev/ttyUSB0" original for FTDI, other names for USB /dev/ttyACM1 or /dev/ttyACM0
+
   baud_rate: 2000000  #2000000 original for FTDI, #115200 recomended for native USB
 
   start_latitude: 15.2

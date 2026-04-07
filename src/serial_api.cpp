@@ -724,7 +724,7 @@ void SerialApi::SerialRead()
         }
         else
         {
-            RCLCPP_ERROR(node_->get_logger(),"[SerialApi] Error while reading serial, try again");
+            RCLCPP_ERROR_ONCE(node_->get_logger(),"[SerialApi] Error while reading serial, try again");
         }
         
     }
