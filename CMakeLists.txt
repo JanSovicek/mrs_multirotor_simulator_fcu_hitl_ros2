@@ -58,7 +58,7 @@ set(LIBRARIES
   MrsMultirotorSimulator_SimulatorSystemRos
 )
 
-set(UMSG_PATH ${CMAKE_CURRENT_DIR}umsg/umsg_lib)
+set(UMSG_PATH ${CMAKE_CURRENT_DIR}umsg/umsg_lib/umsg_lib)
 
 foreach(DEP IN LISTS DEPENDENCIES)
   find_package(${DEP} REQUIRED)
@@ -123,13 +123,13 @@ endif()
 add_library(uMsgLib SHARED
     ${UMSG_PATH}/core/src/umsg.c
     # generated files
-    ${UMSG_PATH}/src/sensors.c
-    ${UMSG_PATH}/src/estimation.c
-    ${UMSG_PATH}/src/offboard.c
-    ${UMSG_PATH}/src/autonomy.c
-    ${UMSG_PATH}/src/state.c
-    ${UMSG_PATH}/src/debug.c
-    ${UMSG_PATH}/src/control.c
+    ${UMSG_PATH}/src/umsg_sensors.c
+    ${UMSG_PATH}/src/umsg_estimation.c
+    ${UMSG_PATH}/src/umsg_offboard.c
+    ${UMSG_PATH}/src/umsg_autonomy.c
+    ${UMSG_PATH}/src/umsg_state.c
+    ${UMSG_PATH}/src/umsg_debug.c
+    ${UMSG_PATH}/src/umsg_control.c
     ${UMSG_PATH}/src/umsg_classes.c
   )
 
