@@ -33,8 +33,7 @@ plugin:
     odometry: true
     ground_truth: true
 
-  serial_port: '/dev/ttyACM0'  # "/dev/ttyUSB0" original for FTDI
-  serial_port_back_up: /dev/ttyACM1'
+  serial_port: '/dev/serial/by-id/usb-MRS_FCU_com_port_324F36723431-if00'  # "/dev/ttyUSB0" original for FTDI, other names for USB /dev/ttyACM1 or /dev/ttyACM0
   baud_rate: 2000000  #2000000 original for FTDI, #115200 recomended for native USB
 
   start_latitude: 15.2

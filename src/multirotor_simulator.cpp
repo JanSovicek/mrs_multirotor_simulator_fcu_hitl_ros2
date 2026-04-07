@@ -168,27 +168,48 @@ void MultirotorSimulator::timerMain() {
     return;
   }
 
-  double simulation_step_size = 1.0 / _simulation_rate_;
-  double clock_step_size      = 1.0 / _clock_rate_;
+  // 1. THE SHIELD: Prevent ROS 2 MultiThreadedExecutors from causing race conditions.
+  // This guarantees only one timer tick can process physics at a time.
+  static std::mutex timer_execution_mutex;
+  std::lock_guard<std::mutex> execution_lock(timer_execution_mutex);
+
+  // 2. INTEGER MATH: Avoid floating point rounding errors (1e9 = nanoseconds)
+  uint64_t simulation_step_ns = (1.0 / _simulation_rate_) * 1e9;
+  uint64_t clock_step_ns      = (1.0 / _clock_rate_) * 1e9;
 
   auto sim_time = mrs_lib::get_mutexed(mutex_sim_time_, sim_time_);
 
-  sim_time = sim_time + rclcpp::Duration(std::chrono::duration<double>(clock_step_size));
-
+  // Increment time rigidly
+  sim_time = sim_time + rclcpp::Duration(std::chrono::nanoseconds(clock_step_ns));
   mrs_lib::set_mutexed(mutex_sim_time_, sim_time, sim_time_);
 
-  const double dt_since_last_step = (sim_time - last_step_time_).seconds();
+  // 3. COMPARE IN NANOSECONDS: This will never fail due to rounding
+  uint64_t dt_ns = (sim_time - last_step_time_).nanoseconds();
 
-  if (dt_since_last_step >= simulation_step_size) {
+  if (dt_ns >= simulation_step_ns) {
+
+    // 1. START THE STOPWATCH
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    // 2. DO THE HEAVY LIFTING
+    // Convert back to double exactly once for the physics engine
+    double dt_seconds_exact = (double)dt_ns / 1e9;
 
     for (size_t i = 0; i < uavs_.size(); i++) {
-
-      uavs_.at(i)->makeStep(dt_since_last_step, sim_time_.seconds());
+      uavs_.at(i)->makeStep(dt_seconds_exact, sim_time.seconds());
     }
 
     publishPoses();
-
     handleCollisions();
+
+    // 3. STOP THE STOPWATCH
+    auto end_time = std::chrono::high_resolution_clock::now();
+    double execution_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+
+    // 4. THE REALITY CHECK
+    if (execution_ms*1e3 > simulation_step_ns) {
+        RCLCPP_WARN(node_->get_logger(), "DEADLINE MISSED: Step took %f ms", execution_ms);
+    }
 
     last_step_time_ = sim_time;
   }

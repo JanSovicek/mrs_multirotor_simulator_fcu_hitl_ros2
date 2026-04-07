@@ -239,6 +239,7 @@ namespace mrs_uav_fcu_api
 
         /*Set payload*/
         out.s.sensors.gps.timestamp = ser_->RosToFcu(sim_time);
+        //RCLCPP_INFO(node_->get_logger(),"[HITL BINDER] GPS ros time: %ld ns, GPS FCU time: %u ms", sim_time.nanoseconds(), out.s.sensors.gps.timestamp);
         out.s.sensors.gps.fixType = FIX_3D;
         out.s.sensors.gps.hELPS = msg->pose.pose.position.z;
         out.s.sensors.gps.hMSL = msg->pose.pose.position.z;
@@ -318,7 +319,7 @@ namespace mrs_uav_fcu_api
         notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
 
         /*Send notifyMsg message*/
-        ser_->sendPacket(notifyMsg);
+        //ser_->sendPacket(notifyMsg);
     }
 
     void hitl_binder::callbackIMU(const sensor_msgs::msg::Imu::ConstSharedPtr msg)
@@ -356,7 +357,7 @@ namespace mrs_uav_fcu_api
         notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
 
         /*Send notifyMsg message*/
-        ser_->sendPacket(notifyMsg);
+        //ser_->sendPacket(notifyMsg);
         //  RCLCPP_INFO(node_->get_logger(),"[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
         //  todo send the message over the serial
     }
@@ -398,7 +399,7 @@ namespace mrs_uav_fcu_api
         len += sizeof(umsg_sensors_notifySensorData_t) + 1;
         notifyMsg.s.len = len;
         notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
-        ser_->sendPacket(notifyMsg);
+        //ser_->sendPacket(notifyMsg);
         //RCLCPP_INFO(node_->get_logger(), "[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
         //  todo send the message over the serial
     }
@@ -432,7 +433,7 @@ namespace mrs_uav_fcu_api
         len += sizeof(umsg_sensors_notifySensorData_t) + 1;
         notifyMsg.s.len = len;
         notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
-        ser_->sendPacket(notifyMsg);
+        //ser_->sendPacket(notifyMsg);
         // RCLCPP_INFO(node_->get_logger(),"[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
         //  todo send the message over the serial
     }
@@ -707,13 +708,11 @@ namespace mrs_uav_fcu_api
 
         /*Init Serial api communication*/
         std::string serial_port;
-        std::string serial_port_back_up;
         int baud_rate;
         local_param_loader.loadParam("serial_port", serial_port);
-        local_param_loader.loadParam("serial_port_back_up", serial_port_back_up);
         local_param_loader.loadParam("baud_rate", baud_rate);
 
-        ser_ = std::make_shared<SerialApi>(node_, serial_port, serial_port_back_up, baud_rate);
+        ser_ = std::make_shared<SerialApi>(node_, serial_port, baud_rate);
         ser_->startSerialApiThreads();
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         ser_->startSyncTimer();

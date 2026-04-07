@@ -117,7 +117,7 @@ public:
     rclcpp::Clock::SharedPtr clock_;
 
     SerialApi(const rclcpp::Node::SharedPtr& node);
-    SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev1, std::string dev2, int baudrate);
+    SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int baudrate);
 
     bool isSynced();
     void startSerialApiThreads();

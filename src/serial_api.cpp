@@ -46,20 +46,19 @@ SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node)
     this->initialize(node);
 }
 
-SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev1, std::string dev2, int baudrate)
+SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int baudrate)
 {
     this->initialize(node);
 
-    if (!ser_.connect(dev1, baudrate, false))
+    if (!ser_.connect(dev, baudrate, false))
     {
-        RCLCPP_ERROR(node_->get_logger(),"could not open serial port %s", dev1.c_str());
-
-        if (!ser_.connect(dev2, baudrate, false))
-        {
-            RCLCPP_ERROR(node_->get_logger(),"could not open serial port %s", dev2.c_str());
-            return;
-        }
+        RCLCPP_ERROR(node_->get_logger(),"could not open serial port %s", dev.c_str());
     }
+    else 
+    {
+         RCLCPP_INFO(node_->get_logger(),"Connected to %s", dev.c_str());
+    }
+
     q_lock_ = std::make_unique<CountingSemaphore>(max_packets_in_q);
     umsg_CRCInit();
 }
@@ -188,7 +187,8 @@ void SerialApi::timerSync()
     };*/
 
     //memcpy(msg.raw, rawSync, 64);
-
+    memset(msg.raw, 0, sizeof(msg.raw));
+    
     msg.s.sync0 = 'M';
     msg.s.sync1 = 'R';
     msg.s.len = UMSG_HEADER_SIZE + sizeof(umsg_state_heartbeat_request_t) + 1;
@@ -206,6 +206,16 @@ void SerialApi::timerSync()
     mrs_lib::set_mutexed(mutex_sync_time, std::tuple(curr_time_simulation, curr_time_steady, sequential), std::forward_as_tuple(sync_time_simulation_ROS_send, sync_time_steady_clock_ROS_send, sequence_number));
 
     RCLCPP_INFO(node_->get_logger(), "[SerialApi]: Sync time message sent, sequence number %u", msg.s.state.heartbeat_request.seq_num);
+
+    /*------- DEBUG - PRINT MESSAGE AS HEX STRING -------*/
+    //std::stringstream ss;
+    //ss << std::hex << std::setfill('0');
+    //for (auto byte : msg.raw) 
+    //{
+    //    ss << std::setw(2) << static_cast<int>(byte) << " ";
+    //}
+
+    //RCLCPP_INFO(node_->get_logger(), "Hex: %s", ss.str().c_str());
 
     return;
 }
@@ -303,7 +313,7 @@ void SerialApi::TxThreadLoop()
         bytes_sent_ += length;
         //if(bytes_sent_%100 == 0)
         //{
-        //    RCLCPP_INFO(node_->get_logger(), "[SerialApi]: bytes_sent_: %u", bytes_sent_);
+        //   RCLCPP_INFO(node_->get_logger(), "[SerialApi]: bytes_sent_: %u", bytes_sent_);
         //}
     }
 }
