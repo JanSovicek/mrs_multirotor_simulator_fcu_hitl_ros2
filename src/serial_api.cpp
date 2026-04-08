@@ -1,5 +1,8 @@
 #include "serial_api.hpp"
+#include <cstdint>
+#include <cstring>
 #include <umsg.h>
+#include "umsg_state.h"
 #include <mrs_lib/mutex.h>
 #include <chrono>
 #include <termios.h>
@@ -167,7 +170,8 @@ void SerialApi::timerSync()
 
     auto sequential = mrs_lib::get_mutexed(mutex_sync_time, sequence_number);
 
-    umsg_MessageToTransfer msg;
+    umsg_MessageToTransfer msgTransfer;
+    umsg_state_heartbeat_request_t msgHbtRequest;
 
     /*uint8_t rawSync[64] = {
     // --- Header (8 bytes) ---
@@ -186,26 +190,28 @@ void SerialApi::timerSync()
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };*/
 
-    //memcpy(msg.raw, rawSync, 64);
-    memset(msg.raw, 0, sizeof(msg.raw));
-    
-    msg.s.sync0 = 'M';
-    msg.s.sync1 = 'R';
-    msg.s.len = UMSG_HEADER_SIZE + sizeof(umsg_state_heartbeat_request_t) + 1;
-    msg.s.state.heartbeat_request.seq_num = sequential;
-    msg.s.state.heartbeat_request.timestamp_arrived = 0;
-    msg.s.msg_class = UMSG_STATE;
-    msg.s.msg_type = STATE_HEARTBEAT_REQUEST;
-    msg.raw[msg.s.len - 1] = umsg_calcCRC(msg.raw, msg.s.len - 1);
+    //Fill messsage header
+    msgTransfer.s.sync0 = 'M';
+    msgTransfer.s.sync1 = 'R';
+    msgTransfer.s.msg_class = UMSG_STATE;
+    msgTransfer.s.msg_type = STATE_HEARTBEAT_REQUEST;
+
+    //Set HBT request
+    msgHbtRequest.seq_num = sequential;
+    msgHbtRequest.timestamp_arrived = 0;
+    //Serialize message into payload buffer
+    uint32_t payload_len = umsg_state_heartbeat_request_serialize(&msgHbtRequest, msgTransfer.s.payload);
+    msgTransfer.s.len = UMSG_HEADER_SIZE + payload_len + UMSG_CRC_SIZE;
+    msgTransfer.raw[msgTransfer.s.len - 1] = umsg_calcCRC(msgTransfer.raw, msgTransfer.s.len - 1);
 
     sequential += 1;
 
     rclcpp::Time curr_time_simulation = clock_->now();
     rclcpp::Time curr_time_steady = steady_clock_.now();
-    sendPacket(msg);
+    sendPacket(msgTransfer);
     mrs_lib::set_mutexed(mutex_sync_time, std::tuple(curr_time_simulation, curr_time_steady, sequential), std::forward_as_tuple(sync_time_simulation_ROS_send, sync_time_steady_clock_ROS_send, sequence_number));
 
-    RCLCPP_INFO(node_->get_logger(), "[SerialApi]: Sync time message sent, sequence number %u", msg.s.state.heartbeat_request.seq_num);
+    RCLCPP_INFO(node_->get_logger(), "[SerialApi]: Sync time message sent, sequence number %u", msgHbtRequest.seq_num);
 
     /*------- DEBUG - PRINT MESSAGE AS HEX STRING -------*/
     //std::stringstream ss;
@@ -580,16 +586,28 @@ void SerialApi::ringBufferRemove(uint32_t bytes_to_remove)
 
 void SerialApi::pushMsgToInternalQueue()
 {
-    // RCLCPP_INFO(node_->get_logger(),"[SerialApi] packet class %d packet type %d", recvdMsg_.s.msg_class, recvdMsg_.s.msg_type);
+    //RCLCPP_INFO(node_->get_logger(),"[SerialApi] packet class %d packet type %d", recvdMsg_.s.msg_class, recvdMsg_.s.msg_type);
     //  RCLCPP_INFO(node_->get_logger(),"[SerialApi] packet Receive");
     if (recvdMsg_.s.msg_class == UMSG_STATE && recvdMsg_.s.msg_type == STATE_HEARTBEAT_RESPONSE)
     {
-        /*Process heart beat and calculate time delay*/
-        umsg_state_heartbeat_response_t beat = recvdMsg_.s.state.heartbeat_response;
+        /*Declare response structure*/
+        umsg_state_heartbeat_response_t heartbeat_response;
+        /*Deserialize HEARTBEAT request*/
+        bool bSuccess = umsg_state_heartbeat_response_deserialize(&heartbeat_response, recvdMsg_.s.payload, recvdMsg_.s.len - UMSG_HEADER_SIZE- UMSG_CRC_SIZE);
+        
+        if(true == bSuccess)
+        {
+            //rclcpp::Time current_packet_arrival_time = steady_clock_.now();
 
-        //rclcpp::Time current_packet_arrival_time = steady_clock_.now();
+            calculateDelay(heartbeat_response, recvd_msg_time_);
+        }
+        else 
+        {
+            // Drop the message - deserialization failed, due to incorrect payload length
+            RCLCPP_ERROR(node_->get_logger(),"[SerialApi] Deserialization of heart beat failed");
+        }
 
-        calculateDelay(beat, recvd_msg_time_);
+        
     }
     else if (recvdMsg_.s.msg_class == UMSG_STATE && recvdMsg_.s.msg_type == STATE_HEARTBEAT_REQUEST)
     {

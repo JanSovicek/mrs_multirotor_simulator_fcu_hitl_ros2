@@ -1,5 +1,6 @@
 /* includes //{ */
 
+#include <cstdint>
 #include <rclcpp/rclcpp.hpp>
 
 #include <mrs_uav_hw_api/api.h>
@@ -37,6 +38,10 @@
 #include <Eigen/Geometry>
 #include <umsg.h>
 #include <umsg_classes.h>
+#include "umsg_sensors.h"
+#include "umsg_control.h"
+#include "umsg_estimation.h"
+#include "umsg_offboard.h"
 
 //}
 
@@ -154,25 +159,29 @@ namespace mrs_uav_fcu_api
         out.s.msg_class = UMSG_SENSORS;
         out.s.msg_type = SENSORS_IMU;
 
-        /*Set payload*/
-        out.s.sensors.imu.accel[0] = static_cast<float>(msg->linear_acceleration.x / GRAV_CONST);
-        out.s.sensors.imu.accel[1] = static_cast<float>(msg->linear_acceleration.y / GRAV_CONST);
-        out.s.sensors.imu.accel[2] = static_cast<float>(msg->linear_acceleration.z / GRAV_CONST);
+        /*Declare IMU message*/
+        umsg_sensors_imu_t msgImu;
 
-        out.s.sensors.imu.gyro[0] = static_cast<float>(msg->angular_velocity.x);
-        out.s.sensors.imu.gyro[1] = static_cast<float>(msg->angular_velocity.y);
-        out.s.sensors.imu.gyro[2] = static_cast<float>(msg->angular_velocity.z);
-        out.s.sensors.imu.timestamp = ser_->RosToFcu(sim_time);
-        out.s.sensors.imu.temperature = index;
+        /*Set payload*/
+        msgImu.accel[0] = static_cast<float>(msg->linear_acceleration.x / GRAV_CONST);
+        msgImu.accel[1] = static_cast<float>(msg->linear_acceleration.y / GRAV_CONST);
+        msgImu.accel[2] = static_cast<float>(msg->linear_acceleration.z / GRAV_CONST);
+
+        msgImu.gyro[0] = static_cast<float>(msg->angular_velocity.x);
+        msgImu.gyro[1] = static_cast<float>(msg->angular_velocity.y);
+        msgImu.gyro[2] = static_cast<float>(msg->angular_velocity.z);
+        msgImu.timestamp = ser_->RosToFcu(sim_time);
+        msgImu.temperature = index;
+
+        /*Serialize message*/
+        uint32_t payload_len = umsg_sensors_imu_serialize(&msgImu, out.s.payload);
 
         /*Increase index counter*/
         index += 1;
 
         /*Set message length and CRC*/
-        uint32_t len = UMSG_HEADER_SIZE;
-        len += sizeof(umsg_sensors_imu_t) + 1;
-        out.s.len = len;
-        out.raw[len - 1] = umsg_calcCRC(out.raw, len - 1);
+        out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
+        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
         /*Send message*/
         ser_->sendPacket(out);
@@ -189,17 +198,21 @@ namespace mrs_uav_fcu_api
 
         //RCLCPP_INFO(node_->get_logger(), "[FCU BINDER] %f %f %f",R(0,0),R(1,0),R(2,0));
 
+        //Declare Magnetometer message
+        umsg_sensors_mag_t msgMag;
+
         /*Set payload*/
-        out.s.sensors.mag.mag[0] = static_cast<float>(msg->magnetic_field.x);
-        out.s.sensors.mag.mag[1] = static_cast<float>(msg->magnetic_field.y);
-        out.s.sensors.mag.mag[2] = static_cast<float>(msg->magnetic_field.z);
-        out.s.sensors.mag.timestamp = ser_->RosToFcu(sim_time);
+        msgMag.mag[0] = static_cast<float>(msg->magnetic_field.x);
+        msgMag.mag[1] = static_cast<float>(msg->magnetic_field.y);
+        msgMag.mag[2] = static_cast<float>(msg->magnetic_field.z);
+        msgMag.timestamp = ser_->RosToFcu(sim_time);
+
+        /*Serialize message*/
+        uint32_t payload_len = umsg_sensors_mag_serialize(&msgMag, out.s.payload);
 
         /*Set message length and CRC*/
-        uint32_t len = UMSG_HEADER_SIZE;
-        len += sizeof(umsg_sensors_mag_t) + 1;
-        out.s.len = len;
-        out.raw[len - 1] = umsg_calcCRC(out.raw, len - 1);
+        out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
+        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
         /*Send message*/
         ser_->sendPacket(out);
@@ -214,15 +227,19 @@ namespace mrs_uav_fcu_api
         out.s.msg_class = UMSG_SENSORS;
         out.s.msg_type = SENSORS_ALTIMETER;
 
+        //Declare Magnetometer message
+        umsg_sensors_altimeter_t msgAlt;
+
         /*Set payload*/
-        out.s.sensors.altimeter.altitude = static_cast<float>(msg->pose.pose.position.z);
-        out.s.sensors.altimeter.timestamp = ser_->RosToFcu(sim_time);
+        msgAlt.altitude = static_cast<float>(msg->pose.pose.position.z);
+        msgAlt.timestamp = ser_->RosToFcu(sim_time);
+
+        /*Serialize message*/
+        uint32_t payload_len = umsg_sensors_altimeter_serialize(&msgAlt, out.s.payload);
 
         /*Set message length and CRC*/
-        uint32_t len = UMSG_HEADER_SIZE;
-        len += sizeof(umsg_sensors_altimeter_t) + 1;
-        out.s.len = len;
-        out.raw[len - 1] = umsg_calcCRC(out.raw, len - 1);
+        out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
+        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
         /*Send message*/
         ser_->sendPacket(out);
@@ -237,15 +254,17 @@ namespace mrs_uav_fcu_api
         out.s.msg_class = UMSG_SENSORS;
         out.s.msg_type = SENSORS_GPS;
 
-        /*Set payload*/
-        out.s.sensors.gps.timestamp = ser_->RosToFcu(sim_time);
-        //RCLCPP_INFO(node_->get_logger(),"[HITL BINDER] GPS ros time: %ld ns, GPS FCU time: %u ms", sim_time.nanoseconds(), out.s.sensors.gps.timestamp);
-        out.s.sensors.gps.fixType = FIX_3D;
-        out.s.sensors.gps.hELPS = msg->pose.pose.position.z;
-        out.s.sensors.gps.hMSL = msg->pose.pose.position.z;
+        //Declare GPS message
+        umsg_sensors_gps_t msgGps;
 
-        out.s.sensors.gps.reserved = 0;
-        out.s.sensors.gps.numSV = 20;
+        /*Set payload*/
+        msgGps.timestamp = ser_->RosToFcu(sim_time);
+        //RCLCPP_INFO(node_->get_logger(),"[HITL BINDER] GPS ros time: %ld ns, GPS FCU time: %u ms", sim_time.nanoseconds(), out.s.sensors.gps.timestamp);
+        msgGps.fixType = FIX_3D;
+        msgGps.hELPS = msg->pose.pose.position.z;
+        msgGps.hMSL = msg->pose.pose.position.z;
+        msgGps.reserved = 0;
+        msgGps.numSV = 20;
 
         /*Convert local cartesian to global GNSS coordinates*/
         double UTMNorth, UTMEast;
@@ -255,12 +274,12 @@ namespace mrs_uav_fcu_api
         mrs_lib::UTMtoLL(UTMNorth, UTMEast, UTM_zone, lat, lon);
 
         /*Set payload*/
-        out.s.sensors.gps.lat = lat;
-        out.s.sensors.gps.lon = lon;
+        msgGps.lat = lat;
+        msgGps.lon = lon;
 
-        out.s.sensors.gps.CRCValid = 1;
-        out.s.sensors.gps.DataValid = 1;
-        out.s.sensors.gps.gnssFixOk = 1;
+        msgGps.CRCValid = 1;
+        msgGps.DataValid = 1;
+        msgGps.gnssFixOk = 1;
 
         //Eigen::Vector3d vel_body = Eigen::Vector3d(msg->twist.twist.linear.x, msg->twist.twist.linear.y, msg->twist.twist.linear.z);
         //Eigen::Quaternion<double> q = Eigen::Quaternion<double>(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
@@ -269,15 +288,16 @@ namespace mrs_uav_fcu_api
 
         // Note: GPS velocity is typically in the body frame, but here we are sending world frame velocity to replicate GPS velocity noise, which is independent of the drone's orientation
         // GPS velocity format is NED (north, east, down), hence the negation of Z component
-        out.s.sensors.gps.vel[0] = msg->twist.twist.linear.y;
-        out.s.sensors.gps.vel[1] = msg->twist.twist.linear.x;
-        out.s.sensors.gps.vel[2] = -msg->twist.twist.linear.z;
+        msgGps.vel[0] = msg->twist.twist.linear.y;
+        msgGps.vel[1] = msg->twist.twist.linear.x;
+        msgGps.vel[2] = -msg->twist.twist.linear.z;
+
+        /*Serialize message*/
+        uint32_t payload_len = umsg_sensors_gps_serialize(&msgGps, out.s.payload);
 
         /*Set message length and CRC*/
-        uint32_t len = UMSG_HEADER_SIZE;
-        len += sizeof(umsg_sensors_gps_t) + 1;
-        out.s.len = len;
-        out.raw[len - 1] = umsg_calcCRC(out.raw, len - 1);
+        out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
+        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
         /*Send message*/
         ser_->sendPacket(out);
@@ -291,35 +311,11 @@ namespace mrs_uav_fcu_api
         {
             return;
         }
-        /*Fill the packet header*/
-        umsg_MessageToTransfer notifyMsg;
-        notifyMsg.s.sync0 = 'M';
-        notifyMsg.s.sync1 = 'R';
-        notifyMsg.s.msg_class = UMSG_SENSORS;
-        notifyMsg.s.msg_type = SENSORS_NOTIFYSENSORDATA;
-
-        /*Set Payload*/
-        notifyMsg.s.sensors.notifySensorData.imu = 0;
-        notifyMsg.s.sensors.notifySensorData.altimeter = 0;
-        notifyMsg.s.sensors.notifySensorData.baro = 0;
-        notifyMsg.s.sensors.notifySensorData.GPS = 0;
-        notifyMsg.s.sensors.notifySensorData.magnetometer = 0;
 
         /*Get time from msg and publish gps*/
         rclcpp::Time sim_time = msg->header.stamp;
         publishGps(msg, sim_time);
-        notifyMsg.s.sensors.notifySensorData.GPS = 1;
         RCLCPP_INFO_ONCE(node_->get_logger(), "[HITLBinder]: GPS CALLBACK called");
-
-        /*Set time, length and CRC*/
-        notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
-        uint32_t len = UMSG_HEADER_SIZE;
-        len += sizeof(umsg_sensors_notifySensorData_t) + 1;
-        notifyMsg.s.len = len;
-        notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
-
-        /*Send notifyMsg message*/
-        //ser_->sendPacket(notifyMsg);
     }
 
     void hitl_binder::callbackIMU(const sensor_msgs::msg::Imu::ConstSharedPtr msg)
@@ -332,34 +328,11 @@ namespace mrs_uav_fcu_api
         /*Extract time from msg*/
         rclcpp::Time sim_time = msg->header.stamp;
 
-        /*Fill packet header*/
-        umsg_MessageToTransfer notifyMsg;
-        notifyMsg.s.sync0 = 'M';
-        notifyMsg.s.sync1 = 'R';
-        notifyMsg.s.msg_class = UMSG_SENSORS;
-        notifyMsg.s.msg_type = SENSORS_NOTIFYSENSORDATA;
-        notifyMsg.s.sensors.notifySensorData.imu = 0;
-        notifyMsg.s.sensors.notifySensorData.altimeter = 0;
-        notifyMsg.s.sensors.notifySensorData.baro = 0;
-        notifyMsg.s.sensors.notifySensorData.GPS = 0;
-        notifyMsg.s.sensors.notifySensorData.magnetometer = 0;
-
         /*Publish Imu*/
         publishImu(msg, sim_time);
-        notifyMsg.s.sensors.notifySensorData.imu = 1;
-
         RCLCPP_INFO_ONCE(node_->get_logger(),"[HITLBinder]: IMU CALLBACK called");
 
-        notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
-        uint32_t len = UMSG_HEADER_SIZE;
-        len += sizeof(umsg_sensors_notifySensorData_t) + 1;
-        notifyMsg.s.len = len;
-        notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
-
-        /*Send notifyMsg message*/
-        //ser_->sendPacket(notifyMsg);
-        //  RCLCPP_INFO(node_->get_logger(),"[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
-        //  todo send the message over the serial
+        //RCLCPP_INFO(node_->get_logger(),"[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
     }
 
     void hitl_binder::callbackRangeFinder(const sensor_msgs::msg::Range::ConstSharedPtr msg)
@@ -376,32 +349,13 @@ namespace mrs_uav_fcu_api
         {
             return;
         }
-        // fill the packet header
+        /*Extract time from msg*/
         rclcpp::Time sim_time = msg->header.stamp;
-
-        umsg_MessageToTransfer notifyMsg;
-        notifyMsg.s.sync0 = 'M';
-        notifyMsg.s.sync1 = 'R';
-        notifyMsg.s.msg_class = UMSG_SENSORS;
-        notifyMsg.s.msg_type = SENSORS_NOTIFYSENSORDATA;
-        notifyMsg.s.sensors.notifySensorData.imu = 0;
-        notifyMsg.s.sensors.notifySensorData.altimeter = 0;
-        notifyMsg.s.sensors.notifySensorData.baro = 0;
-        notifyMsg.s.sensors.notifySensorData.GPS = 0;
-        notifyMsg.s.sensors.notifySensorData.magnetometer = 0;
-
+        /*Publish Altitude*/
         publishAltitude(msg, sim_time);
-        notifyMsg.s.sensors.notifySensorData.altimeter = 1;
         RCLCPP_INFO_ONCE(node_->get_logger(), "[HITLBinder]: Altitude CALLBACK called");
 
-        notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
-        uint32_t len = UMSG_HEADER_SIZE;
-        len += sizeof(umsg_sensors_notifySensorData_t) + 1;
-        notifyMsg.s.len = len;
-        notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
-        //ser_->sendPacket(notifyMsg);
         //RCLCPP_INFO(node_->get_logger(), "[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
-        //  todo send the message over the serial
     }
 
     void hitl_binder::callbackMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg)
@@ -410,32 +364,13 @@ namespace mrs_uav_fcu_api
         {
             return;
         }
-        // fill the packet header
+        /*Extract time from msg*/
         rclcpp::Time sim_time = msg->header.stamp;
-
-        umsg_MessageToTransfer notifyMsg;
-        notifyMsg.s.sync0 = 'M';
-        notifyMsg.s.sync1 = 'R';
-        notifyMsg.s.msg_class = UMSG_SENSORS;
-        notifyMsg.s.msg_type = SENSORS_NOTIFYSENSORDATA;
-        notifyMsg.s.sensors.notifySensorData.imu = 0;
-        notifyMsg.s.sensors.notifySensorData.altimeter = 0;
-        notifyMsg.s.sensors.notifySensorData.baro = 0;
-        notifyMsg.s.sensors.notifySensorData.GPS = 0;
-        notifyMsg.s.sensors.notifySensorData.magnetometer = 0;
-
+        /*Publish magnetometer*/
         publishMag(msg, sim_time);
-        notifyMsg.s.sensors.notifySensorData.magnetometer = 1;
         RCLCPP_INFO_ONCE(node_->get_logger(),"[FcuBinder]: mag CALLBACK called");
 
-        notifyMsg.s.sensors.notifySensorData.timestamp = ser_->RosToFcu(sim_time);
-        uint32_t len = UMSG_HEADER_SIZE;
-        len += sizeof(umsg_sensors_notifySensorData_t) + 1;
-        notifyMsg.s.len = len;
-        notifyMsg.raw[len - 1] = umsg_calcCRC(notifyMsg.raw, len - 1);
-        //ser_->sendPacket(notifyMsg);
         // RCLCPP_INFO(node_->get_logger(),"[FcuBinder]: IMU Duration %d",diff_to_now.nanoseconds());
-        //  todo send the message over the serial
     }
 
     bool hitl_binder::ParseMessage(umsg_MessageToTransfer &msg)
@@ -455,15 +390,25 @@ namespace mrs_uav_fcu_api
                 {    
                     case CONTROL_DSHOTMESSAGE:
                     {
-                        mrs_msgs::msg::HwApiActuatorCmd cmd;
-                        umsg_control_DshotMessage_t DshotMessage = msg.s.control.DshotMessage;
-                        cmd.stamp = ser_->FcuToRos(DshotMessage.timestamp);
+                        umsg_control_DshotMessage_t msgDshot;
+                        bool bSuccess = umsg_control_DshotMessage_deserialize(&msgDshot, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE-UMSG_CRC_SIZE);
 
-                        for (size_t i = 0; i < 4; i++)
+                        if(true == bSuccess)
                         {
-                            cmd.motors.push_back(static_cast<float>(DshotMessage.channels[i] - 48) / 2048.);
+                            mrs_msgs::msg::HwApiActuatorCmd cmd;
+                            cmd.stamp = ser_->FcuToRos(msgDshot.timestamp);
+
+                            for (size_t i = 0; i < 4; i++)
+                            {
+                                cmd.motors.push_back(static_cast<float>(msgDshot.channels[i] - 48) / 2048.);
+                            }
+                            ph_actuator_cmd_.publish(cmd);
                         }
-                        ph_actuator_cmd_.publish(cmd);
+                        else 
+                        {
+                            //Drop the message
+                            RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: DShot message deserialization failed");
+                        }
                     }
                     break;
 
@@ -496,7 +441,7 @@ namespace mrs_uav_fcu_api
         MrsUavFcuApi() {}
         ~MrsUavFcuApi() override{}
 
-        void initialize(const rclcpp::Node::SharedPtr &parent_node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers);
+        void initialize(const rclcpp::Node::SharedPtr &parent_node, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers) override;
 
         void destroy() override;
 
@@ -504,25 +449,25 @@ namespace mrs_uav_fcu_api
 
         // | --------------------- status methods --------------------- |
 
-        mrs_msgs::msg::HwApiStatus getStatus();
-        mrs_msgs::msg::HwApiCapabilities getCapabilities();
+        mrs_msgs::msg::HwApiStatus getStatus() override;
+        mrs_msgs::msg::HwApiCapabilities getCapabilities() override;
 
         // | --------------------- topic callbacks -------------------- |
 
-        bool callbackActuatorCmd(const mrs_msgs::msg::HwApiActuatorCmd::ConstSharedPtr msg);
-        bool callbackControlGroupCmd(const mrs_msgs::msg::HwApiControlGroupCmd::ConstSharedPtr msg);
-        bool callbackAttitudeRateCmd(const mrs_msgs::msg::HwApiAttitudeRateCmd::ConstSharedPtr msg);
-        bool callbackAttitudeCmd(const mrs_msgs::msg::HwApiAttitudeCmd::ConstSharedPtr msg);
-        bool callbackAccelerationHdgRateCmd(const mrs_msgs::msg::HwApiAccelerationHdgRateCmd::ConstSharedPtr msg);
-        bool callbackAccelerationHdgCmd(const mrs_msgs::msg::HwApiAccelerationHdgCmd::ConstSharedPtr msg);
-        bool callbackVelocityHdgRateCmd(const mrs_msgs::msg::HwApiVelocityHdgRateCmd::ConstSharedPtr msg);
-        bool callbackVelocityHdgCmd(const mrs_msgs::msg::HwApiVelocityHdgCmd::ConstSharedPtr msg);
-        bool callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstSharedPtr msg);
-        void callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstSharedPtr msg);
+        bool callbackActuatorCmd(const mrs_msgs::msg::HwApiActuatorCmd::ConstSharedPtr msg) override;
+        bool callbackControlGroupCmd(const mrs_msgs::msg::HwApiControlGroupCmd::ConstSharedPtr msg) override;
+        bool callbackAttitudeRateCmd(const mrs_msgs::msg::HwApiAttitudeRateCmd::ConstSharedPtr msg) override;
+        bool callbackAttitudeCmd(const mrs_msgs::msg::HwApiAttitudeCmd::ConstSharedPtr msg) override;
+        bool callbackAccelerationHdgRateCmd(const mrs_msgs::msg::HwApiAccelerationHdgRateCmd::ConstSharedPtr msg) override;
+        bool callbackAccelerationHdgCmd(const mrs_msgs::msg::HwApiAccelerationHdgCmd::ConstSharedPtr msg) override;
+        bool callbackVelocityHdgRateCmd(const mrs_msgs::msg::HwApiVelocityHdgRateCmd::ConstSharedPtr msg) override;
+        bool callbackVelocityHdgCmd(const mrs_msgs::msg::HwApiVelocityHdgCmd::ConstSharedPtr msg) override;
+        bool callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstSharedPtr msg) override;
+        void callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstSharedPtr msg) override;
         // | -------------------- service callbacks ------------------- |
 
-        std::tuple<bool, std::string> callbackArming(const bool &request);
-        std::tuple<bool, std::string> callbackOffboard(void);
+        std::tuple<bool, std::string> callbackArming(const bool &request) override;
+        std::tuple<bool, std::string> callbackOffboard(void) override; 
 
     private:
         bool is_initialized_ = false;
@@ -778,19 +723,30 @@ namespace mrs_uav_fcu_api
             return false;
         }
 
+        /*Declare transfere message*/
         umsg_MessageToTransfer out;
 
         out.s.sync0 = 'M';
         out.s.sync1 = 'R';
         out.s.msg_class = UMSG_OFFBOARD;
         out.s.msg_type = OFFBOARD_RATECMD;
-        out.s.offboard.RateCmd.roll_rate = msg->body_rate.x;
-        out.s.offboard.RateCmd.pitch_rate = msg->body_rate.y;
-        out.s.offboard.RateCmd.yaw_rate = msg->body_rate.z;
-        out.s.offboard.RateCmd.throttle = msg->throttle;
-        out.s.offboard.RateCmd.timestamp = ser_->RosToFcu(msg->stamp);
-        out.s.len = UMSG_HEADER_SIZE + sizeof(umsg_offboard_RateCmd_t) + 1;
-        out.raw[out.s.len - 1] = umsg_calcCRC(out.raw, out.s.len - 1);
+
+        /*Declare offboard rate command message*/
+        umsg_offboard_RateCmd_t msgRateCmd;
+
+        msgRateCmd.roll_rate = msg->body_rate.x;
+        msgRateCmd.pitch_rate = msg->body_rate.y;
+        msgRateCmd.yaw_rate = msg->body_rate.z;
+        msgRateCmd.throttle = msg->throttle;
+        msgRateCmd.timestamp = ser_->RosToFcu(msg->stamp);
+
+        /*Serialize message*/
+        uint32_t payload_len = umsg_offboard_RateCmd_serialize(&msgRateCmd, out.s.payload);
+
+        /*Set message length and CRC*/
+        out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
+        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+
         ser_->sendPacket(out);
 
         return true;
@@ -810,20 +766,31 @@ namespace mrs_uav_fcu_api
             RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1.0, "[MrsUavFcuApi]: attitude input is not enabled in the config file");
             return false;
         }
+        /*Declare transfere message*/
         umsg_MessageToTransfer out;
 
         out.s.sync0 = 'M';
         out.s.sync1 = 'R';
         out.s.msg_class = UMSG_OFFBOARD;
         out.s.msg_type = OFFBOARD_ATTITUDECMD;
-        out.s.offboard.AttitudeCmd.w = msg->orientation.w;
-        out.s.offboard.AttitudeCmd.x = msg->orientation.x;
-        out.s.offboard.AttitudeCmd.y = msg->orientation.y;
-        out.s.offboard.AttitudeCmd.z = msg->orientation.z;
-        out.s.offboard.AttitudeCmd.throttle = msg->throttle;
-        out.s.offboard.AttitudeCmd.timestamp = ser_->RosToFcu(msg->stamp);
-        out.s.len = UMSG_HEADER_SIZE + sizeof(umsg_offboard_AttitudeCmd_t) + 1;
-        out.raw[out.s.len - 1] = umsg_calcCRC(out.raw, out.s.len - 1);
+
+        /*Declare offboard attitude command message*/
+        umsg_offboard_AttitudeCmd_t msgAttitudeCmd;
+
+        msgAttitudeCmd.w = msg->orientation.w;
+        msgAttitudeCmd.x = msg->orientation.x;
+        msgAttitudeCmd.y = msg->orientation.y;
+        msgAttitudeCmd.z = msg->orientation.z;
+        msgAttitudeCmd.throttle = msg->throttle;
+        msgAttitudeCmd.timestamp = ser_->RosToFcu(msg->stamp);
+
+        /*Serialize message*/
+        uint32_t payload_len = umsg_offboard_AttitudeCmd_serialize(&msgAttitudeCmd, out.s.payload);
+
+        /*Set message length and CRC*/
+        out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
+        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+
         ser_->sendPacket(out);
 
         return true;
@@ -847,17 +814,27 @@ namespace mrs_uav_fcu_api
 
             return {false, "ss.str()"};
         }
+        /*Declare transfere message*/
+        umsg_MessageToTransfer out;
+        out.s.sync0 = 'M';
+        out.s.sync1 = 'R';
+        out.s.msg_class = UMSG_STATE;
+        out.s.msg_type = STATE_STATECHANGEREQUEST;
 
-        umsg_MessageToTransfer msg;
-        msg.s.sync0 = 'M';
-        msg.s.sync1 = 'R';
-        msg.s.msg_class = UMSG_STATE;
-        msg.s.msg_type = STATE_STATECHANGEREQUEST;
-        msg.s.state.stateChangeRequest.requestedState = request ? UAV_FLYING : UAV_DISARMED;
-        msg.s.state.stateChangeRequest.timestamp = ser_->RosToFcu(clock_->now());
-        msg.s.len = UMSG_HEADER_SIZE + sizeof(umsg_state_stateChangeRequest_t) + 1;
-        msg.raw[msg.s.len - 1] = umsg_calcCRC(msg.raw, msg.s.len - 1);
-        ser_->sendPacket(msg);
+        /*Declare state change request message*/
+        umsg_state_stateChangeRequest_t msgStateChangeRequest;
+
+        msgStateChangeRequest.requestedState = request ? UAV_FLYING : UAV_DISARMED;
+        msgStateChangeRequest.timestamp = ser_->RosToFcu(clock_->now());
+
+        /*Serialize message*/
+        uint32_t payload_len = umsg_state_stateChangeRequest_serialize(&msgStateChangeRequest, out.s.payload);
+
+        /*Set message length and CRC*/
+        out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
+        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+
+        ser_->sendPacket(out);
 
         // TODO maybe there is a confirmation mechanism needed?
         RCLCPP_INFO(node_->get_logger(),"[FcuApi]: calling for %s", request ? "arming" : "disarming");
@@ -871,16 +848,27 @@ namespace mrs_uav_fcu_api
 
     std::tuple<bool, std::string> MrsUavFcuApi::callbackOffboard(void)
     {
-        umsg_MessageToTransfer msg;
-        msg.s.sync0 = 'M';
-        msg.s.sync1 = 'R';
-        msg.s.msg_class = UMSG_STATE;
-        msg.s.msg_type = STATE_MODECHANGEREQUEST;
-        msg.s.state.modeChangeRequest.requestedMode = OFFBOARD;
-        msg.s.state.modeChangeRequest.timestamp = ser_->RosToFcu(clock_->now());
-        msg.s.len = UMSG_HEADER_SIZE + sizeof(umsg_state_modeChangeRequest_t) + 1;
-        msg.raw[msg.s.len - 1] = umsg_calcCRC(msg.raw, msg.s.len - 1);
-        ser_->sendPacket(msg);
+        /*Declare transfare message*/
+        umsg_MessageToTransfer out;
+        out.s.sync0 = 'M';
+        out.s.sync1 = 'R';
+        out.s.msg_class = UMSG_STATE;
+        out.s.msg_type = STATE_MODECHANGEREQUEST;
+
+        /*Declare mode change request message*/
+        umsg_state_modeChangeRequest_t msgModeChangeRequest;
+
+        msgModeChangeRequest.requestedMode = OFFBOARD;
+        msgModeChangeRequest.timestamp = ser_->RosToFcu(clock_->now());
+
+        /*Serialize message*/
+        uint32_t payload_len = umsg_state_modeChangeRequest_serialize(&msgModeChangeRequest, out.s.payload);
+
+        /*Set message length and CRC*/
+        out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
+        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+
+        ser_->sendPacket(out);
 
         // TODO maybe there is a confirmation mechanism needed?
         RCLCPP_INFO(node_->get_logger(),"[FcuApi]: calling for offboard mode");
@@ -1056,7 +1044,7 @@ namespace mrs_uav_fcu_api
                 odom.twist.twist.angular.y = odometry_drone_est_.twist.twist.angular.y;
                 odom.twist.twist.angular.z = odometry_drone_est_.twist.twist.angular.z;
             }
-            Eigen::Vector3d vel_world(msg.velocity);
+            Eigen::Vector3d vel_world = Eigen::Map<const Eigen::Vector3f>(msg.velocity).cast<double>();
             Eigen::Vector3d vel_body = R_orientation.transpose() * vel_world;
 
             if (_capabilities_.produces_velocity)
@@ -1577,23 +1565,67 @@ namespace mrs_uav_fcu_api
             switch (msg_type)
             {
             case SENSORS_IMU:
-                publishImu(msg.s.sensors.imu);
-                break;
+            {
+                umsg_sensors_imu_t msgImu;
+                bool bSuccess = umsg_sensors_imu_deserialize(&msgImu, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishImu(msgImu);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: IMU message deserialization failed");
+                }
+            }
+            break;
             case SENSORS_GPS:
             {
-
-                umsg_sensors_gps_t gps = msg.s.sensors.gps;
-                publishNavsatFix(gps);
-                publishGpsStatusRaw(gps);
+                umsg_sensors_gps_t msgGps;
+                bool bSuccess = umsg_sensors_gps_deserialize(&msgGps, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishNavsatFix(msgGps);
+                    publishGpsStatusRaw(msgGps);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: GPS message deserialization failed");
+                }
             }
             break;
             case SENSORS_ALTIMETER:
-                publishAltitude(msg.s.sensors.altimeter);
-                break;
+            {
+                umsg_sensors_altimeter_t msgAltimeter;
+                bool bSuccess = umsg_sensors_altimeter_deserialize(&msgAltimeter, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishAltitude(msgAltimeter);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Altimeter message deserialization failed");
+                }
+            }
+            break;
             case SENSORS_MAG:
-                publishMagneticField(msg.s.sensors.mag);
-                publishMagnetometer(msg.s.sensors.mag);
-                break;
+            {
+                umsg_sensors_mag_t msgMag;
+                bool bSuccess = umsg_sensors_mag_deserialize(&msgMag, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishMagneticField(msgMag);
+                    publishMagnetometer(msgMag);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Magnetometer message deserialization failed");
+                }
+            }
+            break;
             default:
                 parsed = false;
                 break;
@@ -1605,9 +1637,20 @@ namespace mrs_uav_fcu_api
             switch (msg_type)
             {
             case STATE_UAV_STATE:
-                publishState(msg.s.state.UAV_state);
+            {
+                umsg_state_UAV_state_t msgUavState;
+                bool bSuccess = umsg_state_UAV_state_deserialize(&msgUavState, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishState(msgUavState);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: UAV state message deserialization failed");
+                }
                 break;
-
+            }
             default:
                 parsed = false;
                 break;
@@ -1619,9 +1662,20 @@ namespace mrs_uav_fcu_api
             switch (msg_type)
             {
             case CONTROL_SBUSPACKET:
-                publishRC(msg.s.control.sBusPacket);
-                break;
-
+            {
+                umsg_control_sBusPacket_t msgSbus;
+                bool bSuccess = umsg_control_sBusPacket_deserialize(&msgSbus, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishRC(msgSbus);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: SBUS message deserialization failed");
+                }
+            }
+            break;
             default:
                 parsed = false;
                 break;
@@ -1635,13 +1689,34 @@ namespace mrs_uav_fcu_api
             {
             case ESTIMATION_ATTITUDE:
             {
-                publishAttitude(msg.s.estimation.attitude);
+                umsg_estimation_attitude_t msgAtt;
+                bool bSuccess = umsg_estimation_attitude_deserialize(&msgAtt, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishAttitude(msgAtt);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Attitude estimation message deserialization failed");
+                }
             }
             break;
             case ESTIMATION_POSITION:
-                publishOdometryLocal(msg.s.estimation.position);
-                break;
-
+            {
+                umsg_estimation_position_t msgPos;
+                bool bSuccess = umsg_estimation_position_deserialize(&msgPos, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishOdometryLocal(msgPos);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Position estimation message deserialization failed");
+                }
+            }
+            break;
             default:
                 parsed = false;
                 break;
