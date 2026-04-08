@@ -24,7 +24,7 @@ windows:
       layout: tiled
       panes:
         - ros2 launch mrs_multirotor_simulator hw_api.launch.py custom_config:=./custom_configs/hw_api.yaml
-        - until ros2 topic list &>/dev/null; do sleep 0.2; done; sleep 3; ros2 topic echo /uav1/hw_api/rc_channels
+        - until ros2 topic list | grep -q "/uav1/hw_api/rc_channels"; do sleep 0.2; done; sleep 3; ros2 topic echo --qos-reliability best_effort /uav1/hw_api/rc_channels
   - goto:
       layout: tiled
       panes:
