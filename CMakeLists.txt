@@ -80,7 +80,6 @@ include_directories(
 
 add_library(MrsMultirotorSimulator_SimulatorSystemRos SHARED
   src/uav_system_ros.cpp
-  #src/iir_filter.cpp
 )
 
 ament_target_dependencies(MrsMultirotorSimulator_SimulatorSystemRos
@@ -158,6 +157,13 @@ ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsFcu
 )
 
 target_compile_definitions(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
+
+# Filter library 
+add_subdirectory(filt)
+
+ament_target_dependencies(filt
+  ${DEPENDENCIES}
+)
 
 # FCU HITL Binder
 # Interfacing FCU with HITL simulation
