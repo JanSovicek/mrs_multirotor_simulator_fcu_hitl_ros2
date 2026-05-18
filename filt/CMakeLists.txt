@@ -7,7 +7,10 @@ file(GLOB FILT_SRC CONFIGURE_DEPENDS "src/*.c" "src/*.cpp")
 add_library(filt SHARED ${FILT_SRC})
 
 # Add include directory so other targets can include this library headers
-target_include_directories(filt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc)
+target_include_directories(filt PUBLIC 
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
+    $<INSTALL_INTERFACE:include>
+)
 
 # Link dependencies
 target_link_libraries(filt

@@ -40,12 +40,12 @@ void AttitudeEstimator::Init() {
         return;
 }
 
-void AttitudeEstimator::UpdateImu(const umsg_sensors_imu_t& imuMsg) {
+void AttitudeEstimator::UpdateImu(umsg_sensors_imu_t& imuMsg) {
     p_acc_filt_->step(imuMsg.accel);
     p_attitude_filter_->updateImu(imuMsg);
 }
 
-void AttitudeEstimator::UpdateMag(const umsg_sensors_mag_t& magMsg) {
+void AttitudeEstimator::UpdateMag(umsg_sensors_mag_t& magMsg) {
     p_attitude_filter_->updateMag(magMsg);
 }
 

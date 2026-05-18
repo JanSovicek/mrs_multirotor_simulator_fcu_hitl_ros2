@@ -14,7 +14,7 @@ private:
     // Declare private member variables and methods here
 public:
     void Init();
-    void UpdateMag(const umsg_sensors_mag_t& magMsg);
-    void UpdateImu(const umsg_sensors_imu_t& imuMsg);
+    void UpdateMag(umsg_sensors_mag_t& magMsg);
+    void UpdateImu(umsg_sensors_imu_t& imuMsg);
     Eigen::Quaternion<float> GetEstimation(bool* isValid);
 };

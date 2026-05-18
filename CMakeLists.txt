@@ -51,6 +51,7 @@ set(DEPENDENCIES
 )
 
 set(LIBRARIES
+  filt
   uMsgLib
   MrsMultirotorSimulator_HwApiMrsFcu
   MrsMultirotorSimulator_FcuHitlBinder
@@ -139,6 +140,9 @@ ament_target_dependencies(uMsgLib
   ${DEPENDENCIES}
 )
 
+# Filter library 
+add_subdirectory(filt)
+
 # HW API MRS FCU
 # Plugin library for interfacing Simulator with FCU HW
 
@@ -146,10 +150,12 @@ add_library(MrsMultirotorSimulator_HwApiMrsFcu SHARED
   src/hw_api_mrs_fcu.cpp
   src/serial_port.cpp
   src/serial_api.cpp
+  src/attitude_est.cpp
   )
 
 target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu
   uMsgLib
+  filt
   )
 
 ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsFcu
@@ -158,16 +164,8 @@ ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsFcu
 
 target_compile_definitions(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
-# Filter library 
-add_subdirectory(filt)
-
-ament_target_dependencies(filt
-  ${DEPENDENCIES}
-)
-
 # FCU HITL Binder
 # Interfacing FCU with HITL simulation
-
 
 add_library(MrsMultirotorSimulator_FcuHitlBinder SHARED
   src/fcu_hitl_binder.cpp

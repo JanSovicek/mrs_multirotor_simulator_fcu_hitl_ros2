@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <rclcpp/rclcpp.hpp>
 
-#include <mrs_uav_hw_api/MrsUavFcuApi.h>
+#include <mrs_uav_hw_api/api.h>
 
 #include <std_srvs/std_srvs/srv/trigger.h>
 
@@ -76,6 +76,12 @@ namespace mrs_uav_fcu_api
 
         bool is_initialized_ = false;
 
+        mrs_msgs::msg::HwApiCapabilities _capabilities_;
+
+        std::string _uav_name_;
+        std::string _world_frame_name_;
+        std::string _body_frame_name_;
+
         // | ----------------------- subscribers ----------------------- |
         mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu> sh_imu_;
         mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry> sh_odom_;
@@ -96,6 +102,13 @@ namespace mrs_uav_fcu_api
 
         // | ----------------------- publishers ----------------------- |
         mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd> ph_actuator_cmd_;
+
+        //publishes for testing complementary filter
+        mrs_lib::PublisherHandler<geometry_msgs::msg::QuaternionStamped>      ph_orientation_com_filt_;
+        mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>         ph_ang_vel_com_filt_;
+
+        // | ----------------------- Custom publishers ----------------------- |
+        void publishAttitudeEst(const umsg_estimation_attitude_t &msg);
 
     public:
         void Init(const rclcpp::Node::SharedPtr parent_node, std::shared_ptr<SerialApi> ser, mrs_lib::ParamLoader& param_loader);
@@ -147,19 +160,24 @@ namespace mrs_uav_fcu_api
 
         /*Initialize publishers*/
         ph_actuator_cmd_ = mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd>(node_, "~/hitl/actuators_cmd_out");
-        ph_attitude_est_ = mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitude>(node_, "~/hitl/attitude_est_out");
+        ph_orientation_com_filt_ = mrs_lib::PublisherHandler<geometry_msgs::msg::QuaternionStamped>(node_, "~/hitl/orientation_com_filt_out");
+        ph_ang_vel_com_filt_ = mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>(node_, "~/hitl/ang_vel_com_filt_out");
 
         RCLCPP_INFO(node_->get_logger(),"Subscribers and Publishers initialized");
 
         /*Init attitude estimator*/
-        attitude_estimator_->Init();
+        attitude_estimator_.Init();
+
+        param_loader.loadParam("uav_names", _uav_name_);
+        _world_frame_name_ = "world";
+        _body_frame_name_ = "body";
 
         is_initialized_ = true;
     };
 
-    // | ------------------------ Custom publishers ----------------------- |
+    // | ------------------------ Testing publishers ----------------------- |
 
-    void MrsUavFcuApi::publishAttitudeEst(const umsg_estimation_attitude_t &msg)
+    void hitl_binder::publishAttitudeEst(const umsg_estimation_attitude_t &msg)
     {
         if (!is_initialized_)
         {
@@ -167,12 +185,9 @@ namespace mrs_uav_fcu_api
         }
         
         /*----Publish orientation ----*/
-        if (_capabilities_.produces_orientation)
-        {
-
             geometry_msgs::msg::QuaternionStamped orientation;
 
-            orientation.header.stamp = ser_->FcuToRos(msg.timestamp);
+            orientation.header.stamp = rclcpp::Time(msg.timestamp*1e3, RCL_ROS_TIME);
             orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
 
             Eigen::Quaternion<float> q_eig = Eigen::Quaternion<float>(msg.w, msg.x, msg.y, msg.z);
@@ -183,17 +198,14 @@ namespace mrs_uav_fcu_api
             q.w = static_cast<double>(q_eig.w());
             orientation.quaternion = q;
 
-            ph_attitude_est_->publish(orientation);
-            common_handlers_->publishers.publishOrientation(orientation);
-        }
+            ph_orientation_com_filt_.publish(orientation);
 
         /*---- Publish angular velocity ----*/
-        if (_capabilities_.produces_angular_velocity)
-        {
+
 
             geometry_msgs::msg::Vector3Stamped angular_velocity;
 
-            angular_velocity.header.stamp = ser_->FcuToRos(msg.timestamp);
+            angular_velocity.header.stamp = rclcpp::Time(msg.timestamp*1e3, RCL_ROS_TIME);
             angular_velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
             geometry_msgs::msg::Vector3 v;
             v.x = static_cast<double>(msg.att_rate[0]);
@@ -201,9 +213,8 @@ namespace mrs_uav_fcu_api
             v.z = static_cast<double>(msg.att_rate[2]);
             angular_velocity.vector = v;
 
-            common_handlers_->publishers.publishAngularVelocity(angular_velocity);
-        }
-    };
+            ph_ang_vel_com_filt_.publish(angular_velocity);
+      };
 
     /*| ------------------------- Publishers ------------------------- |*/
 
@@ -349,6 +360,16 @@ namespace mrs_uav_fcu_api
         /*Get and publish attitude*/
         bool is_attitude_valid;
         Eigen::Quaternion<float> q = attitude_estimator_.GetEstimation(&is_attitude_valid);
+
+        umsg_estimation_attitude_t msgAtt;
+        msgAtt.timestamp = msgImu.timestamp;
+        msgAtt.att_rate[0] = msgImu.gyro[0];
+        msgAtt.att_rate[1] = msgImu.gyro[1];
+        msgAtt.att_rate[2] = msgImu.gyro[2];
+        msgAtt.w = q.w();
+        msgAtt.x = q.x();
+        msgAtt.y = q.y();
+        msgAtt.z = q.z();
 
         /*Publish attitude*/
         if(is_attitude_valid)
@@ -675,10 +696,6 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "~/simulator_imu_in", &MrsUavFcuApi::callbackImu, this);
 
   sh_range_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Range>(shopts, "~/simulator_rangefinder_in", &MrsUavFcuApi::callbackRangefinder, this);
-
-  // | ----------------------- Custom publishers ----------------------- |
-
-  void MrsUavFcuApi::publishAttitudeEst(const umsg_estimation_attitude_t &msg)
 
   // | ----------------------- publishers ----------------------- |
 
