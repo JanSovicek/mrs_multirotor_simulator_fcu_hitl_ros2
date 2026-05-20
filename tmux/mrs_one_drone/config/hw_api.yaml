@@ -23,7 +23,7 @@ plugin:
     imu:                  true
     altitude:             true
     magnetometer_heading: true
-    #magnetic_field:      false       # Added placeholder, not in original sim
+    magnetic_field:       true 
     rc_channels:          true
     battery_state:        true
     position:             true

@@ -1,12 +1,12 @@
 # the rate of stepping the simulation
-simulation_rate: 200.0 # Hz (original was 1000 Hz, 200 Hz is selected to match IMU rate with FCU HITL attitude rate control)
+simulation_rate: 100.0 # Hz (original was 1000 Hz, 200 Hz is selected to match IMU rate with FCU HITL attitude rate control)
 
 # the rate of publishing of /clock
 clock_rate:      400.0 # Hz, should be >= simulation_rate, ideally in whole multiples of simulation_rate
 
 dynamic:
 
-  realtime_factor: 1.0 # [-]
+  realtime_factor: 0.5 # [-]
 
   collisions:
 
@@ -124,9 +124,9 @@ start_latitude: 15.2
 start_longitude: 14.3
 
 
-imu_rate: 200.0 #[Hz]
+imu_rate: 101.0 #[Hz]
 
-mag_rate: 50.0 #[Hz]
+mag_rate: 51.0 #[Hz]
 
 altitude_rate: 75.0 #[Hz]
 

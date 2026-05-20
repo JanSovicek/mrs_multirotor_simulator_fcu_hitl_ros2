@@ -12,15 +12,15 @@ plugin:
   input_timeout: 1.0 # [s]
 
   input_mode:
-    actuators:             false
-    control_group:         false
+    actuators:             true
+    control_group:         true
     attitude_rate:         true
     attitude:              true
-    acceleration_hdg_rate: false
-    acceleration_hdg:      false
-    velocity_hdg_rate:     false
-    velocity_hdg:          false
-    position:              false
+    acceleration_hdg_rate: true
+    acceleration_hdg:      true
+    velocity_hdg_rate:     true
+    velocity_hdg:          true
+    position:              true
 
     feedforward: true
 

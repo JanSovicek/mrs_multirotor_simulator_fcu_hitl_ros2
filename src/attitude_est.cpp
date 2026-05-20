@@ -31,6 +31,7 @@ void AttitudeEstimator::Init() {
         params.max_dt             = 0.1;  // Maximum allowed time step for prediction, in seconds
             
         params.max_yaw_bias_rad_s = 0.05; // MEMS gyros rarely drift more than a few degrees per second. If the bias exceeds ~0.05 rad/s (approx 3 deg/s), it is magnetic EMI, not gyro drift.
+        params.max_roll_pitch_bias_rad_s = 0.1; // Roll/pitch bias can be higher than yaw bias, especially for low-cost IMUs, but should still be limited to prevent excessive gyro bias during prolonged flight in magnetic disturbances.
 
         p_attitude_filter_ = new attitude_estimation::ComplementaryFilter(params);
 
@@ -41,8 +42,16 @@ void AttitudeEstimator::Init() {
 }
 
 void AttitudeEstimator::UpdateImu(umsg_sensors_imu_t& imuMsg) {
-    p_acc_filt_->step(imuMsg.accel);
-    p_attitude_filter_->updateImu(imuMsg);
+
+    if(first_imu_received_)
+    {
+        p_acc_filt_->init(imuMsg.accel[0], imuMsg.accel[1], imuMsg.accel[2]);
+        first_imu_received_ = false;
+    }
+    else {
+        p_acc_filt_->step(imuMsg.accel);
+        p_attitude_filter_->updateImu(imuMsg);
+    }
 }
 
 void AttitudeEstimator::UpdateMag(umsg_sensors_mag_t& magMsg) {

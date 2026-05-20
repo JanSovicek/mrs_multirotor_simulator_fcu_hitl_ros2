@@ -65,8 +65,9 @@ namespace mrs_uav_fcu_api
     class hitl_binder
     {
     private:
-        std::shared_ptr<SerialApi> ser_;
+        //std::shared_ptr<SerialApi> ser_;
         rclcpp::Node::SharedPtr node_;
+        rclcpp::Clock::SharedPtr clock_;
         std::string UTM_zone;
 
         rclcpp::CallbackGroup::SharedPtr cbgrp_subs_;
@@ -81,6 +82,9 @@ namespace mrs_uav_fcu_api
         std::string _uav_name_;
         std::string _world_frame_name_;
         std::string _body_frame_name_;
+
+        std::string orientation_frame_id_cached_;
+        std::string angular_velocity_frame_id_cached_;
 
         // | ----------------------- subscribers ----------------------- |
         mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu> sh_imu_;
@@ -111,15 +115,24 @@ namespace mrs_uav_fcu_api
         void publishAttitudeEst(const umsg_estimation_attitude_t &msg);
 
     public:
-        void Init(const rclcpp::Node::SharedPtr parent_node, std::shared_ptr<SerialApi> ser, mrs_lib::ParamLoader& param_loader);
+        void initialize(const rclcpp::Node::SharedPtr parent_node, mrs_lib::ParamLoader& param_loader, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers);
         bool ParseMessage(umsg_MessageToTransfer &msg);
     };
 
-    void hitl_binder::Init(const rclcpp::Node::SharedPtr parent_node, std::shared_ptr<SerialApi> ser, mrs_lib::ParamLoader& param_loader)
+    void hitl_binder::initialize(const rclcpp::Node::SharedPtr parent_node, mrs_lib::ParamLoader& param_loader, std::shared_ptr<mrs_uav_hw_api::CommonHandlers_t> common_handlers)
     {
         /*Asign Node and Serial class instance*/
-        node_ = parent_node;
-        ser_ = ser;
+        node_ = parent_node;  
+        clock_ = node_->get_clock();
+
+        common_handlers_ = common_handlers;
+
+        _uav_name_         = common_handlers->getUavName();
+        _body_frame_name_  = common_handlers->getBodyFrameName();
+        _world_frame_name_ = common_handlers->getWorldFrameName();
+
+        orientation_frame_id_cached_ = _uav_name_ + "/" + _world_frame_name_;
+        angular_velocity_frame_id_cached_ = _uav_name_ + "/" + _body_frame_name_;
 
         /*Asign callback group*/
         cbgrp_subs_ = node_->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
@@ -168,10 +181,6 @@ namespace mrs_uav_fcu_api
         /*Init attitude estimator*/
         attitude_estimator_.Init();
 
-        param_loader.loadParam("uav_names", _uav_name_);
-        _world_frame_name_ = "world";
-        _body_frame_name_ = "body";
-
         is_initialized_ = true;
     };
 
@@ -186,17 +195,26 @@ namespace mrs_uav_fcu_api
         
         /*----Publish orientation ----*/
             geometry_msgs::msg::QuaternionStamped orientation;
+            // Direct 64-bit integer scale to avoid implicit floating-point conversions
+            orientation.header.stamp = rclcpp::Time(static_cast<int64_t>(msg.timestamp) * 1000LL, RCL_ROS_TIME);
 
-            orientation.header.stamp = rclcpp::Time(msg.timestamp*1e3, RCL_ROS_TIME);
-            orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
+            // Zero-allocation assignment using the pre-cached frame identifier
+            orientation.header.frame_id = orientation_frame_id_cached_;
 
-            Eigen::Quaternion<float> q_eig = Eigen::Quaternion<float>(msg.w, msg.x, msg.y, msg.z);
-            geometry_msgs::msg::Quaternion q;
-            q.x = static_cast<double>(q_eig.x());
-            q.y = static_cast<double>(q_eig.y());
-            q.z = static_cast<double>(q_eig.z());
-            q.w = static_cast<double>(q_eig.w());
-            orientation.quaternion = q;
+            // Mathematical Safety Guard: Enforce normalization to protect downstream estimators
+            Eigen::Quaternion<double> q_eig(
+                static_cast<double>(msg.w),
+                static_cast<double>(msg.x),
+                static_cast<double>(msg.y),
+                static_cast<double>(msg.z)
+            );
+            q_eig.normalize(); 
+
+            // Clean assignment to target ROS message fields
+            orientation.quaternion.x = q_eig.x();
+            orientation.quaternion.y = q_eig.y();
+            orientation.quaternion.z = q_eig.z();
+            orientation.quaternion.w = q_eig.w();
 
             ph_orientation_com_filt_.publish(orientation);
 
@@ -205,8 +223,9 @@ namespace mrs_uav_fcu_api
 
             geometry_msgs::msg::Vector3Stamped angular_velocity;
 
-            angular_velocity.header.stamp = rclcpp::Time(msg.timestamp*1e3, RCL_ROS_TIME);
-            angular_velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
+            angular_velocity.header.stamp = rclcpp::Time(static_cast<int64_t>(msg.timestamp) * 1000LL, RCL_ROS_TIME);
+            angular_velocity.header.frame_id = angular_velocity_frame_id_cached_;
+            
             geometry_msgs::msg::Vector3 v;
             v.x = static_cast<double>(msg.att_rate[0]);
             v.y = static_cast<double>(msg.att_rate[1]);
@@ -261,7 +280,7 @@ namespace mrs_uav_fcu_api
 
         /*Set payload*/
         msgAlt.altitude = static_cast<float>(msg->pose.pose.position.z);
-        msgAlt.timestamp = ser_->RosToFcu(sim_time);
+        //msgAlt.timestamp = ser_->RosToFcu(sim_time);
 
         /*Serialize message*/
         uint32_t payload_len = umsg_sensors_altimeter_serialize(&msgAlt, out.s.payload);
@@ -271,7 +290,7 @@ namespace mrs_uav_fcu_api
         out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
         /*Send message*/
-        ser_->sendPacket(out);
+        //ser_->sendPacket(out);
     }
 
     void hitl_binder::publishGps(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time)
@@ -287,7 +306,7 @@ namespace mrs_uav_fcu_api
         umsg_sensors_gps_t msgGps;
 
         /*Set payload*/
-        msgGps.timestamp = ser_->RosToFcu(sim_time);
+        //msgGps.timestamp = ser_->RosToFcu(sim_time);
         //RCLCPP_INFO(node_->get_logger(),"[HITL BINDER] GPS ros time: %ld ns, GPS FCU time: %u ms", sim_time.nanoseconds(), out.s.sensors.gps.timestamp);
         msgGps.fixType = FIX_3D;
         msgGps.hELPS = msg->pose.pose.position.z;
@@ -329,7 +348,7 @@ namespace mrs_uav_fcu_api
         out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
         /*Send message*/
-        ser_->sendPacket(out);
+        //ser_->sendPacket(out);
     }
 
     /*| ------------------------- callbacks ------------------------- |*/
@@ -345,7 +364,9 @@ namespace mrs_uav_fcu_api
 
     void hitl_binder::callbackIMU(const sensor_msgs::msg::Imu::ConstSharedPtr msg)
     {
-
+      static uint32_t number_of_calls = 0;
+      if(100<number_of_calls++)
+      {
         /*Extract time from msg*/
         rclcpp::Time sim_time = msg->header.stamp;
 
@@ -353,6 +374,11 @@ namespace mrs_uav_fcu_api
 
         /*Publish Imu*/
         publishImu(msg, msgImu, sim_time);
+
+        if(200>number_of_calls)
+        {
+          RCLCPP_INFO(node_->get_logger(), "[HITLBinder]: Imu time: %lu (micro s), Imu Accel: x=%f, y=%f, z=%f, Imu Gyro: x=%f, y=%f, z=%f", msgImu.timestamp, msgImu.accel[0], msgImu.accel[1], msgImu.accel[2], msgImu.gyro[0], msgImu.gyro[1], msgImu.gyro[2]);
+        }
 
         /*Call complementary filter update */
         attitude_estimator_.UpdateImu(msgImu);
@@ -371,11 +397,22 @@ namespace mrs_uav_fcu_api
         msgAtt.y = q.y();
         msgAtt.z = q.z();
 
+        if(125>number_of_calls)
+        {
+          RCLCPP_INFO(node_->get_logger(), "[HITLBinder]: Attitude time: %lu (micro s), Attitude estimate: w=%f, x=%f, y=%f, z=%f", msgAtt.timestamp, msgAtt.w, msgAtt.x, msgAtt.y, msgAtt.z);
+        }
+        else
+        {
+          RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[HITLBinder]: Attitude time: %lu (micro s), Attitude estimate: w=%f, x=%f, y=%f, z=%f", msgAtt.timestamp, msgAtt.w, msgAtt.x, msgAtt.y, msgAtt.z);
+        }
+
         /*Publish attitude*/
         if(is_attitude_valid)
-        {
+        { 
+            RCLCPP_INFO_ONCE(node_->get_logger(),"[HITLBinder]: Attitude is valid, publishing estimate");
             publishAttitudeEst(msgAtt);
         }
+      }
 
         RCLCPP_INFO_ONCE(node_->get_logger(),"[HITLBinder]: IMU CALLBACK called");
 
@@ -408,6 +445,16 @@ namespace mrs_uav_fcu_api
         /*Publish magnetometer*/
         umsg_sensors_mag_t msgMag;
         publishMag(msg, msgMag, sim_time);
+        /*Swap mag direction*/
+        //float mag_x = msgMag.mag[0];
+        //msgMag.mag[0] = msgMag.mag[1];
+        //msgMag.mag[1] = mag_x;
+
+        static uint32_t number_of_calls = 0;
+
+        if(100>number_of_calls++)        {
+          RCLCPP_INFO(node_->get_logger(), "[HITLBinder]: Mag time: %lu (micro s), Mag x=%f, y=%f, z=%f", msgMag.timestamp, msgMag.mag[0], msgMag.mag[1], msgMag.mag[2]);
+        }
         /*Update attitude estimator*/
         attitude_estimator_.UpdateMag(msgMag);
 
@@ -439,7 +486,7 @@ namespace mrs_uav_fcu_api
                         if(true == bSuccess)
                         {
                             mrs_msgs::msg::HwApiActuatorCmd cmd;
-                            cmd.stamp = ser_->FcuToRos(msgDshot.timestamp);
+                            //cmd.stamp = ser_->FcuToRos(msgDshot.timestamp);
 
                             for (size_t i = 0; i < 4; i++)
                             {
@@ -540,6 +587,8 @@ namespace mrs_uav_fcu_api
 
     rclcpp::Time last_cmd_time_;
     std::mutex   mutex_last_cmd_time_;
+
+    hitl_binder hitl_binder_;
 
     // | ----------------------- subscribers ---------------------- |
 
@@ -673,7 +722,7 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   local_param_loader.loadParam("outputs/odometry", (bool &)_capabilities_.produces_odometry);
   local_param_loader.loadParam("outputs/ground_truth", (bool &)_capabilities_.produces_ground_truth);
 
-  _capabilities_.produces_magnetic_field = false;
+  _capabilities_.produces_magnetic_field = true;
 
   if (!local_param_loader.loadedSuccessfully()) {
     RCLCPP_ERROR(node_->get_logger(), "Could not load all parameters!");
@@ -754,6 +803,9 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   }
 
   // | ----------------------- finish init ---------------------- |
+
+  /*Init HITL binder*/
+  hitl_binder_.initialize(node_, local_param_loader, common_handlers);
 
   RCLCPP_INFO(node_->get_logger(), "initialized");
 

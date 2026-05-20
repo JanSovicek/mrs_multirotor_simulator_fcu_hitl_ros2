@@ -12,6 +12,7 @@ private:
     attitude_estimation::ComplementaryFilter *p_attitude_filter_;
     filters::acceleration_filter *p_acc_filt_;
     // Declare private member variables and methods here
+    bool first_imu_received_ = true;
 public:
     void Init();
     void UpdateMag(umsg_sensors_mag_t& magMsg);

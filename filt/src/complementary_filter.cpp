@@ -9,11 +9,12 @@ namespace attitude_estimation
 /*//{ constructor */
 ComplementaryFilter::ComplementaryFilter(const complementary_filter_params_t& params) {
 
-  q_nwu_to_enu_   = Eigen::Quaternion<float>(1, 0, 0, 1).normalized();  // transformation of frame from NWU to ENU - that is equivalent to a rotation of the vector by 90 degrees around the Z axis
-  is_initialized_ = true;
-  params_         = params;
-  bias_ang_vel_   = bias_ang_vel_.Zero();
-  prev_attitude_  = Eigen::Quaternion<float>(1, 0, 0, 0);
+  q_nwu_to_enu_         = Eigen::Quaternion<float>(1, 0, 0, 1).normalized();  // transformation of frame from NWU to ENU - that is equivalent to a rotation of the vector by 90 degrees around the Z axis
+  is_initialized_       = true;
+  params_               = params;
+  bias_ang_vel_         = bias_ang_vel_.Zero();
+  prev_attitude_        = Eigen::Quaternion<float>(1, 0, 0, 0);
+  mag_rate_correction_  = Eigen::Vector3f::Zero();
 }
 /*//}*/
 
@@ -51,7 +52,7 @@ void ComplementaryFilter::updateImu(umsg_sensors_imu_t& imuMsg) {
     }
     ang_vel             = Eigen::Vector3f(imuMsg.gyro);
     prev_ang_vel_       = ang_vel;
-    prev_stamp_IMU_          = imuMsg.timestamp;
+    prev_stamp_IMU_     = imuMsg.timestamp;
     is_first_iteration_ = false;
 
     return;
@@ -70,20 +71,26 @@ void ComplementaryFilter::updateImu(umsg_sensors_imu_t& imuMsg) {
     const Eigen::Quaternion<float> attitude_filtered = iterateFilter(accel, ang_vel, dt, imuMsg.timestamp);
     prev_attitude_                                   = attitude_filtered;
     // prepare for next iteration
-    prev_stamp_IMU_                                      = imuMsg.timestamp;
-    prev_ang_vel_ = ang_vel;
+    prev_stamp_IMU_                                  = imuMsg.timestamp;
+    prev_ang_vel_                                    = ang_vel;
   }
 }
 /*//}*/
 
 /*//{ callbackMag() */
 void ComplementaryFilter::updateMag(umsg_sensors_mag_t& magMsg) {
-  mag_msg_              = magMsg;
-  mag_correction_ready_ = true;
-
+  
   if (first_mag_data_) {
     prev_stamp_MAG_ = magMsg.timestamp;
+    mag_msg_        = magMsg;
     first_mag_data_ = false;
+    mag_correction_ready_ = true;
+  }
+  else if((params_.max_dt >= static_cast<float>(magMsg.timestamp - prev_stamp_MAG_) * 1e-6) && (magMsg.timestamp > prev_stamp_MAG_))
+  {
+    prev_stamp_MAG_ = mag_msg_.timestamp;
+    mag_msg_        = magMsg;
+    mag_correction_ready_ = true;
   }
 }
 /*//}*/
@@ -215,15 +222,14 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
     corrected_ang_vel += mag_rate_correction_; 
     // Decay the proportional Mag correction to zero over time
     mag_rate_correction_ *= 0.9f;
-  } 
-  
-
+  }
 
   // predict orientation using unbiased gyro measurements
   const Eigen::Quaternion<float> q_pred = predictOrientationFromGyro(corrected_ang_vel, dt);
 
   // obtain orientation correction in the form of delta quaternion from measured acceleration
   const Eigen::Quaternion<float> dq_corr_acc = correctionOrientationFromAccel(accel, q_pred);
+
 
   // estimate gain based on acceleration magnitude
   float accel_gain;
@@ -245,19 +251,16 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
     mag_correction_ready_ = false;
 
     // time sanity check
-    if( params_.max_dt >= static_cast<float>(current_timestamp_IMU - mag_msg_.timestamp) * 1e-6 ) 
+    if((params_.max_dt >= static_cast<float>(current_timestamp_IMU - mag_msg_.timestamp) * 1e-6) && (mag_msg_.timestamp > prev_stamp_MAG_)) 
     {
       Eigen::Vector3f mag_field(mag_msg_.mag[0], mag_msg_.mag[1], mag_msg_.mag[2]);
 
       // obtain orientation correction in the form of delta quaternion from measured magnetic field
       float yaw_error_rad = correctionOrientationFromMagField(mag_field, q_corrected);
 
-      //rotate gravity vector into body frame
-      const Eigen::Vector3f gravity_body = rotateVectorByQuaternion(Eigen::Vector3f::UnitZ(), q_corrected.conjugate());
-
       // ensure the error is strictly bounded between -PI and PI
-      if (yaw_error_rad > M_PI)  yaw_error_rad -= 2.0 * M_PI;
-      if (yaw_error_rad < -M_PI) yaw_error_rad += 2.0 * M_PI;
+      if (yaw_error_rad > static_cast<float>(M_PI))  yaw_error_rad -= 2.0f * static_cast<float>(M_PI);
+      if (yaw_error_rad < -static_cast<float>(M_PI)) yaw_error_rad += 2.0f * static_cast<float>(M_PI);
 
       // update the gyro bias (The INTEGRAL Term)
       // use dt_mag (e.g., ~0.02s) at 50Hz.
@@ -265,17 +268,20 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
       float dt_mag = static_cast<float>(mag_msg_.timestamp - prev_stamp_MAG_) * 1e-6;
       float total_correction = (params_.mag_gain_i * yaw_error_rad * dt_mag);
 
-      // Project the correct into the local body frame axes 
+      // rotate gravity vector into body frame
+      const Eigen::Vector3f gravity_body = rotateVectorByQuaternion(Eigen::Vector3f::UnitZ(), q_corrected.conjugate());
+
+      // project the correction into the local body frame axes 
       Eigen::Vector3f projected_correction = gravity_body * total_correction;
       bias_ang_vel_ += projected_correction;
 
       // anti-Windup Clamp
-      if (bias_ang_vel_.x() > params_.max_yaw_bias_rad_s)  bias_ang_vel_.x() = params_.max_yaw_bias_rad_s;
-      if (bias_ang_vel_.x() < -params_.max_yaw_bias_rad_s) bias_ang_vel_.x() = -params_.max_yaw_bias_rad_s;
+      if (bias_ang_vel_.x() > params_.max_yaw_bias_rad_s)  bias_ang_vel_.x() = params_.max_roll_pitch_bias_rad_s;
+      if (bias_ang_vel_.x() < -params_.max_yaw_bias_rad_s) bias_ang_vel_.x() = -params_.max_roll_pitch_bias_rad_s;
 
       // anti-Windup Clamp
-      if (bias_ang_vel_.y() > params_.max_yaw_bias_rad_s)  bias_ang_vel_.y() = params_.max_yaw_bias_rad_s;
-      if (bias_ang_vel_.y() < -params_.max_yaw_bias_rad_s) bias_ang_vel_.y() = -params_.max_yaw_bias_rad_s;
+      if (bias_ang_vel_.y() > params_.max_yaw_bias_rad_s)  bias_ang_vel_.y() = params_.max_roll_pitch_bias_rad_s;
+      if (bias_ang_vel_.y() < -params_.max_yaw_bias_rad_s) bias_ang_vel_.y() = -params_.max_roll_pitch_bias_rad_s;
 
       // anti-Windup Clamp
       if (bias_ang_vel_.z() > params_.max_yaw_bias_rad_s)  bias_ang_vel_.z() = params_.max_yaw_bias_rad_s;
@@ -340,6 +346,13 @@ Eigen::Quaternion<float> ComplementaryFilter::correctionOrientationFromAccel(con
 /*//{ correctionOrientationFromMagField() */
 float ComplementaryFilter::correctionOrientationFromMagField(const Eigen::Vector3f& mag_field, const Eigen::Quaternion<float>& q_corr_acc) {
 
+  // guard against dead/corrupted magnetometer data
+  float mag_norm = mag_field.norm();
+  if (mag_norm < 1e-4f || !std::isfinite(mag_norm)) 
+  {
+    return 0.0f;
+  }
+
   // global magnetic filed vector in NWU frame
   Eigen::Vector3f mag_field_global = Eigen::Vector3f::UnitX(); // ignoring vertical component
 
@@ -349,16 +362,20 @@ float ComplementaryFilter::correctionOrientationFromMagField(const Eigen::Vector
   }
 
   // rotate magnetic field vector from world frame to body frame using the acceleration-corrected attitude estimate
-  const Eigen::Vector3f mag_field_body = rotateVectorByQuaternion(mag_field_global, q_corr_acc.conjugate());
+  const Eigen::Vector3f mag_field_body_est = rotateVectorByQuaternion(mag_field_global, q_corr_acc.conjugate());
 
   // calculate the error between measured and expected magnetic field, this is the axis of rotation needed to correct the attitude
-  Eigen::Vector3f error = mag_field.normalized().cross(mag_field_body);
+  Eigen::Vector3f error_3d = mag_field.normalized().cross(mag_field_body_est);
 
-  // the Z-component of the error represents the heading deviation.
-  float yaw_error = error.z();
+  // project the world vertical axis into the body frame
+  Eigen::Vector3f gravity_body = rotateVectorByQuaternion(Eigen::Vector3f::UnitZ(), q_corr_acc.conjugate());
+
+  // heading is the dot product of the 3D error vector and the gravity vector in the body frame
+  float yaw_error = error_3d.dot(gravity_body);
 
   return yaw_error;
 }
+
 /*//}*/
 
 /*//{ isInSteadyState() */

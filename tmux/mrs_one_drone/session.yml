@@ -49,7 +49,7 @@ windows:
   - commands:
       layout: tiled
       panes:
-        - waitForTakeoff && ./goto.py
+        #- waitForTakeoff && ./goto.py
   - rviz:
       layout: tiled
       panes:
@@ -66,4 +66,4 @@ windows:
       layout: tiled
       panes:
         - ros2 run plotjuggler plotjuggler
-        #-rosbag record -a 
+        - ros2 bag record -o hitl_filter_test_bag --topics uav1/hw_api/hitl/orientation_com_filt_out /uav1/hw_api/hitl/ang_vel_com_filt_out

@@ -116,7 +116,7 @@ def generate_launch_description():
                   ("~/hitl/odom_in", ["/multirotor_simulator/", uav_name, "/odom_noise"]),
                   ("~/hitl/altitude_in", ["/multirotor_simulator/", uav_name, "/altitude_noise"]),
                   ("~/hitl/magnetometer_in", ["/multirotor_simulator/", uav_name, "/magnetometer_noise"]),
-                  ("~/hitl/actuators_cmd_out", ["/multirotor_simulator/", uav_name, "/actuators_cmd"]),
+                  #("~/hitl/actuators_cmd_out", ["/multirotor_simulator/", uav_name, "/actuators_cmd"]),
                   ("~/simulator_imu_in", ["/multirotor_simulator/", uav_name, "/imu"]),
                   ("~/simulator_odom_in", ["/multirotor_simulator/", uav_name, "/odom"]),
                   ("~/simulator_rangefinder_in", ["/multirotor_simulator/", uav_name, "/rangefinder"]),

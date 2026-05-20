@@ -36,6 +36,7 @@ struct complementary_filter_params_t
   float mag_gain_i;
   float mag_acc_threshold;
   float max_yaw_bias_rad_s; // maximum yaw bias in radians per second, to prevent excessive gyro bias
+  float max_roll_pitch_bias_rad_s; // maximum roll/pitch bias in radians per second, to prevent excessive gyro bias
 
   float max_dt;
 };
