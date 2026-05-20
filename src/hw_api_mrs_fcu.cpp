@@ -364,9 +364,7 @@ namespace mrs_uav_fcu_api
 
     void hitl_binder::callbackIMU(const sensor_msgs::msg::Imu::ConstSharedPtr msg)
     {
-      static uint32_t number_of_calls = 0;
-      if(100<number_of_calls++)
-      {
+
         /*Extract time from msg*/
         rclcpp::Time sim_time = msg->header.stamp;
 
@@ -374,11 +372,6 @@ namespace mrs_uav_fcu_api
 
         /*Publish Imu*/
         publishImu(msg, msgImu, sim_time);
-
-        if(200>number_of_calls)
-        {
-          RCLCPP_INFO(node_->get_logger(), "[HITLBinder]: Imu time: %lu (micro s), Imu Accel: x=%f, y=%f, z=%f, Imu Gyro: x=%f, y=%f, z=%f", msgImu.timestamp, msgImu.accel[0], msgImu.accel[1], msgImu.accel[2], msgImu.gyro[0], msgImu.gyro[1], msgImu.gyro[2]);
-        }
 
         /*Call complementary filter update */
         attitude_estimator_.UpdateImu(msgImu);
@@ -397,14 +390,7 @@ namespace mrs_uav_fcu_api
         msgAtt.y = q.y();
         msgAtt.z = q.z();
 
-        if(125>number_of_calls)
-        {
-          RCLCPP_INFO(node_->get_logger(), "[HITLBinder]: Attitude time: %lu (micro s), Attitude estimate: w=%f, x=%f, y=%f, z=%f", msgAtt.timestamp, msgAtt.w, msgAtt.x, msgAtt.y, msgAtt.z);
-        }
-        else
-        {
-          RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[HITLBinder]: Attitude time: %lu (micro s), Attitude estimate: w=%f, x=%f, y=%f, z=%f", msgAtt.timestamp, msgAtt.w, msgAtt.x, msgAtt.y, msgAtt.z);
-        }
+        RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[HITLBinder]: Attitude time: %lu (micro s), Attitude estimate: w=%f, x=%f, y=%f, z=%f", msgAtt.timestamp, msgAtt.w, msgAtt.x, msgAtt.y, msgAtt.z);
 
         /*Publish attitude*/
         if(is_attitude_valid)
@@ -412,7 +398,6 @@ namespace mrs_uav_fcu_api
             RCLCPP_INFO_ONCE(node_->get_logger(),"[HITLBinder]: Attitude is valid, publishing estimate");
             publishAttitudeEst(msgAtt);
         }
-      }
 
         RCLCPP_INFO_ONCE(node_->get_logger(),"[HITLBinder]: IMU CALLBACK called");
 
@@ -450,11 +435,6 @@ namespace mrs_uav_fcu_api
         //msgMag.mag[0] = msgMag.mag[1];
         //msgMag.mag[1] = mag_x;
 
-        static uint32_t number_of_calls = 0;
-
-        if(100>number_of_calls++)        {
-          RCLCPP_INFO(node_->get_logger(), "[HITLBinder]: Mag time: %lu (micro s), Mag x=%f, y=%f, z=%f", msgMag.timestamp, msgMag.mag[0], msgMag.mag[1], msgMag.mag[2]);
-        }
         /*Update attitude estimator*/
         attitude_estimator_.UpdateMag(msgMag);
 
