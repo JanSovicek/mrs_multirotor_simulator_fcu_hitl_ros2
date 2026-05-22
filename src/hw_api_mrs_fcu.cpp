@@ -390,7 +390,7 @@ namespace mrs_uav_fcu_api
         msgAtt.y = q.y();
         msgAtt.z = q.z();
 
-        RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 100, "[HITLBinder]: Attitude time: %lu (micro s), Attitude estimate: w=%f, x=%f, y=%f, z=%f", msgAtt.timestamp, msgAtt.w, msgAtt.x, msgAtt.y, msgAtt.z);
+        RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[HITLBinder]: Attitude time: %lu (micro s), Attitude estimate: w=%f, x=%f, y=%f, z=%f", msgAtt.timestamp, msgAtt.w, msgAtt.x, msgAtt.y, msgAtt.z);
 
         /*Publish attitude*/
         if(is_attitude_valid)

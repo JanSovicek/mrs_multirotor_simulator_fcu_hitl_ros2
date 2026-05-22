@@ -1,6 +1,7 @@
 #include "complementary_filter.h"
 #include <sys/types.h>
 #include <cmath>
+#include <iostream>
 
 namespace attitude_estimation
 {
@@ -217,15 +218,29 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
   // mag_rate_correction_z_: the P-term nudge towards North (updated at 50Hz)
   Eigen::Vector3f corrected_ang_vel = ang_vel - bias_ang_vel_;
 
+  static uint32_t imu_counter = 0;
+  imu_counter++;
+
+  if (imu_counter % 1000 == 0) { // Print once per second so it doesn't flood the console
+    std::cout << "Mag Corr Z in 1000Hz loop: " << mag_rate_correction_.z() << std::endl;
+    printf("Corrected Ang Vel: [%.4f, %.4f, %.4f]\n", corrected_ang_vel.x(), corrected_ang_vel.y(), corrected_ang_vel.z());
+  }
+
   if(params_.use_mag_correction)
   {
-    corrected_ang_vel += mag_rate_correction_; 
-    // Decay the proportional Mag correction to zero over time
-    mag_rate_correction_ *= 0.9f;
+    corrected_ang_vel += mag_rate_correction_;  
+    
+    // WATCHDOG CHECK: How long has it been since the last mag message?
+    float time_since_last_mag = static_cast<float>(current_timestamp_IMU - prev_stamp_MAG_) * 1e-6;
+
+    if (time_since_last_mag > params_.mag_timeout_s) {
+        // Magnetometer has stopped responding Safe zero-out to prevent runaway drift
+        mag_rate_correction_ = Eigen::Vector3f::Zero();
+    }
   }
 
   // predict orientation using unbiased gyro measurements
-  const Eigen::Quaternion<float> q_pred = predictOrientationFromGyro(corrected_ang_vel, dt);
+  const Eigen::Quaternion<float> q_pred = predictOrientationFromGyroRK2(corrected_ang_vel, prev_ang_vel_, dt);
 
   // obtain orientation correction in the form of delta quaternion from measured acceleration
   const Eigen::Quaternion<float> dq_corr_acc = correctionOrientationFromAccel(accel, q_pred);
@@ -273,15 +288,15 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
 
       // project the correction into the local body frame axes 
       Eigen::Vector3f projected_correction = gravity_body * total_correction;
-      bias_ang_vel_ += projected_correction;
+      bias_ang_vel_ -= projected_correction;
 
       // anti-Windup Clamp
-      if (bias_ang_vel_.x() > params_.max_yaw_bias_rad_s)  bias_ang_vel_.x() = params_.max_roll_pitch_bias_rad_s;
-      if (bias_ang_vel_.x() < -params_.max_yaw_bias_rad_s) bias_ang_vel_.x() = -params_.max_roll_pitch_bias_rad_s;
+      if (bias_ang_vel_.x() > params_.max_roll_pitch_bias_rad_s)  bias_ang_vel_.x() = params_.max_roll_pitch_bias_rad_s;
+      if (bias_ang_vel_.x() < -params_.max_roll_pitch_bias_rad_s) bias_ang_vel_.x() = -params_.max_roll_pitch_bias_rad_s;
 
       // anti-Windup Clamp
-      if (bias_ang_vel_.y() > params_.max_yaw_bias_rad_s)  bias_ang_vel_.y() = params_.max_roll_pitch_bias_rad_s;
-      if (bias_ang_vel_.y() < -params_.max_yaw_bias_rad_s) bias_ang_vel_.y() = -params_.max_roll_pitch_bias_rad_s;
+      if (bias_ang_vel_.y() > params_.max_roll_pitch_bias_rad_s)  bias_ang_vel_.y() = params_.max_roll_pitch_bias_rad_s;
+      if (bias_ang_vel_.y() < -params_.max_roll_pitch_bias_rad_s) bias_ang_vel_.y() = -params_.max_roll_pitch_bias_rad_s;
 
       // anti-Windup Clamp
       if (bias_ang_vel_.z() > params_.max_yaw_bias_rad_s)  bias_ang_vel_.z() = params_.max_yaw_bias_rad_s;
@@ -292,6 +307,10 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
       // so it can be applied continuously at 1000Hz IMU loop rate
       mag_rate_correction_ = gravity_body * (params_.mag_gain_p * yaw_error_rad);
     }
+  }
+  else
+  {
+    mag_correction_ready_ = false;
   } 
 
   return q_corrected.normalized();
@@ -326,18 +345,64 @@ Eigen::Quaternion<float> ComplementaryFilter::predictOrientationFromGyro(const E
 }
 /*//}*/
 
+/*//{ predictOrientationFromGyroRK2() */
+Eigen::Quaternion<float> ComplementaryFilter::predictOrientationFromGyroRK2(const Eigen::Vector3f& ang_vel, const Eigen::Vector3f& ang_vel_prev, const float dt) {
+
+  // strict boundary check to prevent zero-time updates and task overruns
+  if (dt <= 0.0f || dt > params_.max_dt) {
+    return prev_attitude_;
+  }
+
+  // 1e-8f perfectly aligns with single-precision machine epsilon limits for squared magnitudes.
+  // 1e-12 (double) for 1e-8f (single-precision float).
+  if (ang_vel.squaredNorm() < 1e-8f) {
+    return prev_attitude_;
+  }
+
+  // rk2 midpoint integration: average the current and previous angular velocity vectors.
+  const Eigen::Vector3f ang_vel_mid = 0.5f * (ang_vel + ang_vel_prev);
+
+  // compute the incremental rotation vector over the time slice dt
+  // using explicit single-precision literals ('0.5f') to lock native VSQRT/VMUL instructions.
+  const Eigen::Vector3f half_theta = ang_vel_mid * (dt * 0.5f);
+
+  // small-angle approximation: construct the exponential delta quaternion.
+  // at 1000Hz (dt = 0.001s), this approach is highly optimized and structurally rigid.
+  const Eigen::Quaternion<float> dq_mid(1.0f, half_theta.x(), half_theta.y(), half_theta.z());
+
+  // propagate the attitude matrix and explicitly strip out numerical scaling errors by normalizing
+  Eigen::Quaternion<float> q_pred = (prev_attitude_ * dq_mid).normalized();
+
+  return q_pred;
+}
+/*//}*/
+
 /*//{ correctionOrientationFromAccel() */
 Eigen::Quaternion<float> ComplementaryFilter::correctionOrientationFromAccel(const Eigen::Vector3f& accel, const Eigen::Quaternion<float>& q_pred) {
+
+  // protect the FPU from a Zero-G division-by-zero
+  const float accel_norm = accel.norm();
+  if (accel_norm < 0.01f || !std::isfinite(accel_norm)) {
+    // if in freefall or sensor data is corrupt, skip the correction entirely.
+    // return an identity quaternion (zero angular correction).
+    return Eigen::Quaternion<float>::Identity();
+  }
+
+  // normalize the vector safely using the pre-calculated norm
+  const Eigen::Vector3f accel_normalized = accel / accel_norm;
 
   //rotate gravity vector into body frame
   const Eigen::Vector3f gravity_body = rotateVectorByQuaternion(Eigen::Vector3f::UnitZ(), q_pred.conjugate());
 
   // calculate the error between measured and expected gravity vector, this is the axis of rotation needed to correct the attitude
-  Eigen::Vector3f error = accel.normalized().cross(gravity_body);
+  Eigen::Vector3f error = accel_normalized.cross(gravity_body);
+
+  // zero out the Z component of the error to prevent roll/pitch correction from affecting yaw, since we rely on magnetometer for yaw correction
+  error.z() = 0.0f;
   
   // build the correction quaternion from the error vector, 
   // use small angle approximation (sin(theta/2) ~ theta/2) since the correction is expected to be small between iterations
-  const Eigen::Quaternion<float> dq_corr(1, error.x()*0.5, error.y()*0.5, error.z()*0.5);
+  const Eigen::Quaternion<float> dq_corr(1, error.x()*0.5f, error.y()*0.5f, error.z()*0.5f);
 
   return dq_corr.normalized();
 }

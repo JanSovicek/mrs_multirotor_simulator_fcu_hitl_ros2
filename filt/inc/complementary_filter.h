@@ -37,6 +37,7 @@ struct complementary_filter_params_t
   float mag_acc_threshold;
   float max_yaw_bias_rad_s; // maximum yaw bias in radians per second, to prevent excessive gyro bias
   float max_roll_pitch_bias_rad_s; // maximum roll/pitch bias in radians per second, to prevent excessive gyro bias
+  float mag_timeout_s; // timeout for magnetometer data, if exceeded, mag correction is zeroed out to prevent runaway drift
 
   float max_dt;
 };
@@ -84,6 +85,7 @@ private:
 
   Eigen::Quaternion<float> iterateFilter(const Eigen::Vector3f& accel, const Eigen::Vector3f& ang_vel, const float dt, uint64_t current_timestamp);
   Eigen::Quaternion<float> predictOrientationFromGyro(const Eigen::Vector3f& ang_vel, const float dt);
+  Eigen::Quaternion<float> predictOrientationFromGyroRK2(const Eigen::Vector3f& ang_vel, const Eigen::Vector3f& ang_vel_prev, const float dt);
   Eigen::Quaternion<float> correctionOrientationFromAccel(const Eigen::Vector3f& accel, const Eigen::Quaternion<float>& q_pred);
   float                    correctionOrientationFromMagField(const Eigen::Vector3f& mag_field, const Eigen::Quaternion<float>& q_corr_acc);
    

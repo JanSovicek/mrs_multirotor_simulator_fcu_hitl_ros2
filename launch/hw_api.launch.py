@@ -112,6 +112,7 @@ def generate_launch_description():
                 ],
 
                 remappings=[
+                  #("~/hitl/imu_in", ["/multirotor_simulator/", uav_name, "/imu"]),
                   ("~/hitl/imu_in", ["/multirotor_simulator/", uav_name, "/imu_noise"]),
                   ("~/hitl/odom_in", ["/multirotor_simulator/", uav_name, "/odom_noise"]),
                   ("~/hitl/altitude_in", ["/multirotor_simulator/", uav_name, "/altitude_noise"]),
