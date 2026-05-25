@@ -32,7 +32,7 @@ private:
 class SerialApi
 {
 private:
-    const int max_packets_in_q = 200;
+    const int max_packets_in_q = 2000;
     std::thread recvThread_;
     std::thread serReadThread_;
 

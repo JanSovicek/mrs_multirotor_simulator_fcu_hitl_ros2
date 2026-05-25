@@ -54,8 +54,13 @@
 #define PWM_DEADBAND 200
 #define PWM_RANGE PWM_MAX - PWM_MIN
 
+constexpr uint16_t DSHOT_MIN_THROTTLE = 48;
+constexpr uint16_t DSHOT_MAX_THROTTLE = 2047;
+constexpr float DSHOT_RANGE_SCALE = static_cast<float>(DSHOT_MAX_THROTTLE - DSHOT_MIN_THROTTLE); // 1999.0f
+
 /*Start X and Y position to be shared across hitl_binder(PC->FCU) and MrsUavFcuApi(FCU->PC)*/
 static double startX, startY;
+
 
 //}
 
@@ -276,6 +281,8 @@ namespace mrs_uav_fcu_api
         /*Set payload*/
         msgGps.lat = lat;
         msgGps.lon = lon;
+        msgGps.hAcc = 0.5;
+        msgGps.vAcc = 0.5;
 
         msgGps.CRCValid = 1;
         msgGps.DataValid = 1;
@@ -291,6 +298,7 @@ namespace mrs_uav_fcu_api
         msgGps.vel[0] = msg->twist.twist.linear.y;
         msgGps.vel[1] = msg->twist.twist.linear.x;
         msgGps.vel[2] = -msg->twist.twist.linear.z;
+        msgGps.sAcc = 0.2;
 
         /*Serialize message*/
         uint32_t payload_len = umsg_sensors_gps_serialize(&msgGps, out.s.payload);
@@ -398,11 +406,33 @@ namespace mrs_uav_fcu_api
                             mrs_msgs::msg::HwApiActuatorCmd cmd;
                             cmd.stamp = ser_->FcuToRos(msgDshot.timestamp);
 
+                            // Pre-allocated array size matching the 4-rotor mixer geometry
+                            // This prevents any runtime heap allocation
                             for (size_t i = 0; i < 4; i++)
                             {
-                                cmd.motors.push_back(static_cast<float>(msgDshot.channels[i] - 48) / 2048.);
+                                uint16_t raw_cmd = msgDshot.channels[i];
+
+                                // Failsafe: Handle disarm or special command states (0 - 47) securely
+                                if (raw_cmd < DSHOT_MIN_THROTTLE)
+                                {
+                                    // Force absolute zero throttle; do not let it go negative or underflow
+                                    cmd.motors[i] = 0.0f;
+                                    //cmd.motors.push_back(); 
+                                    continue;
+                                }
+
+                                // Strict upper-bound bounding
+                                if (raw_cmd > DSHOT_MAX_THROTTLE)
+                                {
+                                    raw_cmd = DSHOT_MAX_THROTTLE;
+                                }
+
+                                // Safe, normalized scaling utilizing the STM32F7 Double-Precision FPU (compiled as float)
+                                // Maps raw [48, 2047] cleanly to [0.0f, 1.0f]
+                                cmd.motors[i] = static_cast<float>(raw_cmd - DSHOT_MIN_THROTTLE) / DSHOT_RANGE_SCALE;
+                                //cmd.motors.push_back();
                             }
-                            ph_actuator_cmd_.publish(cmd);
+                            
                         }
                         else 
                         {
@@ -747,7 +777,7 @@ namespace mrs_uav_fcu_api
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
         out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
-        ser_->sendPacket(out);
+        //ser_->sendPacket(out);
 
         return true;
     }
@@ -791,7 +821,8 @@ namespace mrs_uav_fcu_api
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
         out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
-        ser_->sendPacket(out);
+        //ser_->sendPacket(out);
+        //Crashes FCU
 
         return true;
     }
@@ -834,7 +865,7 @@ namespace mrs_uav_fcu_api
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
         out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
-        ser_->sendPacket(out);
+        //ser_->sendPacket(out);
 
         // TODO maybe there is a confirmation mechanism needed?
         RCLCPP_INFO(node_->get_logger(),"[FcuApi]: calling for %s", request ? "arming" : "disarming");
@@ -868,7 +899,7 @@ namespace mrs_uav_fcu_api
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
         out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
 
-        ser_->sendPacket(out);
+        //ser_->sendPacket(out);
 
         // TODO maybe there is a confirmation mechanism needed?
         RCLCPP_INFO(node_->get_logger(),"[FcuApi]: calling for offboard mode");

@@ -94,12 +94,12 @@ void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, const 
     // 5. Gatekeeper: Is this a "Lucky Packet"?
     // We only trust the time calculation if the RTT is close to the physical minimum.
     // (You can maintain a simple min_rtt variable that slowly decays upwards to handle route changes)
-    if (current_rtt_ms < historical_min_rtt_) historical_min_rtt_ = current_rtt_ms;
+    //if (current_rtt_ms < historical_min_rtt_) historical_min_rtt_ = current_rtt_ms;
 
     // Allow a small margin (e.g., 30% or 1ms) above the best-ever RTT
-    double acceptance_threshold = historical_min_rtt_ * 1.3; 
+    //double acceptance_threshold = historical_min_rtt_ * 1.3; 
 
-    if (current_rtt_ms <= acceptance_threshold) {
+    //if (current_rtt_ms <= acceptance_threshold) {
 
         // 6. Calculate Offset relative to SIMULATION TIME
         //    Offset = (Sim_Arrival) - (FCU_Time) - (One_Way_Delay)
@@ -121,10 +121,10 @@ void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, const 
         
         RCLCPP_INFO(node_->get_logger(), "[SYNC] Seq: %u, Updated Offset: %ld ns | RTT: %.2f ms", heartbeat.seq_num, smoothed_offset_ns_.load(), current_rtt_ms);
 
-    } else {
-        RCLCPP_WARN(node_->get_logger(), "[SYNC] Seq: %u, Ignored Jittery Packet (RTT: %.2f > Limit: %.2f)", heartbeat.seq_num, current_rtt_ms, acceptance_threshold);
-        // We do NOT update smoothed_offset_ns_. We keep using the old stable one.
-    }
+    //} else {
+    //    RCLCPP_WARN(node_->get_logger(), "[SYNC] Seq: %u, Ignored Jittery Packet (RTT: %.2f > Limit: %.2f)", heartbeat.seq_num, current_rtt_ms, acceptance_threshold);
+    //    // We do NOT update smoothed_offset_ns_. We keep using the old stable one.
+    //}
 }
 
 //Convert ROS Time -> FCU Time (e.g., for sending commands)
