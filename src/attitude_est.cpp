@@ -23,6 +23,8 @@ void AttitudeEstimator::Init() {
         params.bottom_accel_error_threshold = 0.05; //0.15; //0.05 // below this error, the full accel correction gain is applied
         params.top_accel_error_threshold    = 0.4; //0.6; // above this error, the accel correction gain is zero, between bottom and top, the gain is scaled linearly
 
+        params.max_rotation_rate_cutoff = 0.4;
+
         params.use_mag_correction = true; // true;
         params.mag_gain_p         = 0.4; // Proportional gain for magnetometer correction
         params.mag_gain_i         = 0.001; // Integral gain for magnetometer correction

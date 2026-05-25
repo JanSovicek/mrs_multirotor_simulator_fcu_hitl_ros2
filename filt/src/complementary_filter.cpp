@@ -254,8 +254,15 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
     accel_gain = params_.default_accel_gain;
   }
 
+  // calculate gyro gate - instantaneous protection for flight transitions
+  float rotation_speed = corrected_ang_vel.norm();
+  float gyro_weight = (params_.max_rotation_rate_cutoff >= rotation_speed) ? 1.0f: 0.0f;
+  
+  // combine the accela nd gyro scaling
+  const float combined_scale = accel_gain * gyro_weight;
+
   // scale correction by the accel_gain to reduce influence of high-frequency noise
-  const Eigen::Quaternion<float> dq_corr_acc_sc = scaleCorrection(dq_corr_acc, accel_gain);
+  const Eigen::Quaternion<float> dq_corr_acc_sc = scaleCorrection(dq_corr_acc, combined_scale);
 
   // combine prediction with acceleration correction
   Eigen::Quaternion<float> q_corrected = q_pred * dq_corr_acc_sc;

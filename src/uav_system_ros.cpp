@@ -192,10 +192,15 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
   param_loader.loadParam("accel_z_stddev", stddev);
   accel_z_gen_ = std::normal_distribution<double>(bias, stddev);
 
-  // gyro
-  param_loader.loadParam("gyro_bias", bias);
-  param_loader.loadParam("gyro_stddev", stddev);
-  gyro_gen_ = std::normal_distribution<double>(bias, stddev);
+  // gyro xy
+  param_loader.loadParam("gyro_xy_bias", bias);
+  param_loader.loadParam("gyro_xy_stddev", stddev);
+  gyro_xy_gen_ = std::normal_distribution<double>(bias, stddev);
+
+  // gyro z
+  param_loader.loadParam("gyro_z_bias", bias);
+  param_loader.loadParam("gyro_z_stddev", stddev);
+  gyro_z_gen_ = std::normal_distribution<double>(bias, stddev);
 
   // altitude
   param_loader.loadParam("altitude_bias", bias);
@@ -721,12 +726,12 @@ void UavSystemRos::publishIMU(const MultirotorModel::State &state, const double 
   // add the noise
   if (time_stamp - imu_last_stamp_ >= imu_delay_)
   {      
-      imu.angular_velocity.x += gyro_noiseShapers_.at(0).iterate(gyro_gen_(gen));
-      imu.angular_velocity.y += gyro_noiseShapers_.at(1).iterate(gyro_gen_(gen));
-      imu.angular_velocity.z += gyro_noiseShapers_.at(2).iterate(gyro_gen_(gen));
+      imu.angular_velocity.x += gyro_noiseShapers_.at(0).iterate(gyro_xy_gen_(gen));
+      imu.angular_velocity.y += gyro_noiseShapers_.at(1).iterate(gyro_xy_gen_(gen));
+      imu.angular_velocity.z += gyro_noiseShapers_.at(2).iterate(gyro_z_gen_(gen));
 
-      imu.linear_acceleration.x += accel_noiseShapers_.at(1).iterate(accel_xy_gen_(gen));
-      imu.linear_acceleration.y += accel_noiseShapers_.at(0).iterate(accel_xy_gen_(gen));
+      imu.linear_acceleration.x += accel_noiseShapers_.at(0).iterate(accel_xy_gen_(gen));
+      imu.linear_acceleration.y += accel_noiseShapers_.at(1).iterate(accel_xy_gen_(gen));
       imu.linear_acceleration.z += accel_noiseShapers_.at(2).iterate(accel_z_gen_(gen));
 
       imu_last_stamp_ = time_stamp;

@@ -6,7 +6,7 @@ clock_rate:      4000.0 # Hz, should be >= simulation_rate, ideally in whole mul
 
 dynamic:
 
-  realtime_factor: 0.1 # [-]
+  realtime_factor: 0.25 # [-]
 
   collisions:
 
@@ -124,9 +124,9 @@ start_latitude: 15.2
 start_longitude: 14.3
 
 
-imu_rate: 1005.0 #[Hz]
+imu_rate: 1000.0 #[Hz]
 
-mag_rate: 51.0 #[Hz]
+mag_rate: 50.0 #[Hz]
 
 altitude_rate: 75.0 #[Hz]
 
@@ -135,12 +135,14 @@ position_rate: 10.0 #[Hz]
 range_rate: 1.0 #[Hz]
 
 accel_xy_stddev: 5 #0.80 # [m/s^2] ( based on data from real flight max dev +-2 m/s^2 hence stddev = 4/4 m/s^2, 0.0217 m/s^2 derived from ICM-42688-P datasheet RMS noice density 70 ug/√Hz and 1000 Hz imu rate) 
-accel_z_stddev:  9 #1.60 # [m/s^2] ( based on data from real flight max dev +-4 m/s^2 hence stddev = 8/4 m/s^2, 0.0217 m/s^2 derived from ICM-42688-P datasheet RMS noice density 70 ug/√Hz and 1000 Hz imu rate) 
+accel_z_stddev:  5 #1.60 # [m/s^2] ( based on data from real flight max dev +-4 m/s^2 hence stddev = 8/4 m/s^2, 0.0217 m/s^2 derived from ICM-42688-P datasheet RMS noice density 70 ug/√Hz and 1000 Hz imu rate) 
 accel_xy_bias: 0.0 # [m/s^2] 
 accel_z_bias: 0.0 # [m/s^2] 
 
-gyro_stddev: 0.2 #0.00155 # [rad/s] (derived from ICM-42688-P datasheet RMS noice density 2.8 mdps/√Hz and 1000 Hz imu rate)
-gyro_bias: 0.02 # [rad/s]
+gyro_xy_stddev: 0.80 #0.00155 # [rad/s] (derived from ICM-42688-P datasheet RMS noice density 2.8 mdps/√Hz and 1000 Hz imu rate)
+gyro_xy_bias: 0.001 # [rad/s]
+gyro_z_stddev: 0.30 #0.00155 # [rad/s] (derived from ICM-42688-P datasheet RMS noice density 2.8 mdps/√Hz and 1000 Hz imu rate)
+gyro_z_bias: 0.001 # [rad/s]
 
 altitude_stddev: 0.25 # [m] (0.25 estimated from Michal Reiser data, 0.63m derived from LPS22HB datasheet RMS pressure noise 0.0075 hPa)
 altitude_bias: 0.0 # [m]

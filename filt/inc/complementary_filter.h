@@ -28,8 +28,10 @@ struct complementary_filter_params_t
   bool  use_adaptive_gain;
   float default_accel_gain;  // default gain for accelerometer, needs to be kept below 0.1 due to small angle approximation in the correction quaternion
 
-  float bottom_accel_error_threshold;  // for adaptive gain
-  float top_accel_error_threshold;     // for adaptive gain
+  float bottom_accel_error_threshold;  // (g) for adaptive gain
+  float top_accel_error_threshold;     // (g) for adaptive gain
+
+  float max_rotation_rate_cutoff;     // (rad/s) rotation rate at which fusing of accelerometer is disabled (to stop attitude deviation during flaring)
 
   bool  use_mag_correction;
   float mag_gain_p;
