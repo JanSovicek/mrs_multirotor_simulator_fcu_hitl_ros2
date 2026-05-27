@@ -32,6 +32,8 @@
 #include <mavros_msgs/mavros_msgs/msg/actuator_control.h>
 #include <mavros_msgs/mavros_msgs/msg/gpsraw.h>
 
+#include "geometry_msgs/msg/quaternion.hpp"
+#include "geometry_msgs/msg/quaternion_stamped.hpp"
 #include "serial_api.hpp"
 
 #include <Eigen/Dense>
@@ -217,6 +219,7 @@ namespace mrs_uav_fcu_api
             orientation.quaternion.w = q_eig.w();
 
             ph_orientation_com_filt_.publish(orientation);
+            //common_handlers_->publishers.publishOrientation(orientation);
 
         /*---- Publish angular velocity ----*/
 
@@ -263,7 +266,6 @@ namespace mrs_uav_fcu_api
         msgMag.mag[2] = static_cast<float>(msg->magnetic_field.z);
         msgMag.timestamp = static_cast<uint64_t>(sim_time.nanoseconds()*1e-3); // Convert to microseconds
 
-        /*Call complementary filter update */
     }
 
     void hitl_binder::publishAltitude(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time)
@@ -524,6 +526,11 @@ namespace mrs_uav_fcu_api
 
     mrs_msgs::msg::HwApiCapabilities _capabilities_;
 
+    bool _publish_orientation_com_filt_;
+    bool _publish_ang_vel_com_filt_;
+
+    bool _orietation_output_is_com_filt_estimate_;
+
     bool _feedforward_enabled_;
 
     double      _utm_x_;
@@ -555,6 +562,12 @@ namespace mrs_uav_fcu_api
     bool callbackPositionCmd(const mrs_msgs::msg::HwApiPositionCmd::ConstSharedPtr msg);
     void callbackTrackerCmd(const mrs_msgs::msg::TrackerCommand::ConstSharedPtr msg);
 
+    void callbackOdom(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
+    void callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg);
+    void callbackImuNoise(const sensor_msgs::msg::Imu::ConstSharedPtr msg);
+    void callbackMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg);
+    void callbackRangefinder(const sensor_msgs::msg::Range::ConstSharedPtr msg);
+
     // | -------------------- service callbacks ------------------- |
 
     std::tuple<bool, std::string> callbackArming(const bool &request);
@@ -572,13 +585,11 @@ namespace mrs_uav_fcu_api
 
     // | ----------------------- subscribers ---------------------- |
 
-    mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry> sh_odom_;
-    mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>   sh_imu_;
-    mrs_lib::SubscriberHandler<sensor_msgs::msg::Range> sh_range_;
-
-    void callbackOdom(const nav_msgs::msg::Odometry::ConstSharedPtr msg);
-    void callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg);
-    void callbackRangefinder(const sensor_msgs::msg::Range::ConstSharedPtr msg);
+    mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>         sh_odom_;
+    mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>           sh_imu_;
+    mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>           sh_imu_noise_;
+    mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField> sh_mag_;
+    mrs_lib::SubscriberHandler<sensor_msgs::msg::Range>         sh_range_;
 
     // | ----------------------- publishers ----------------------- |
 
@@ -592,6 +603,9 @@ namespace mrs_uav_fcu_api
     mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiVelocityHdgCmd>         ph_velocity_hdg_cmd_;
     mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiPositionCmd>            ph_position_cmd_;
     mrs_lib::PublisherHandler<mrs_msgs::msg::TrackerCommand>              ph_tracker_cmd_;
+
+    mrs_lib::PublisherHandler<geometry_msgs::msg::QuaternionStamped>      ph_orientation_com_filt_;
+    mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>         ph_ang_vel_com_filt_;
 
     // | ------------------------- timers ------------------------- |
 
@@ -607,7 +621,19 @@ namespace mrs_uav_fcu_api
     std::atomic<bool> connected_ = false;
     std::mutex        mutex_status_;
 
+    std::mutex attitude_est_mutex_;
+    AttitudeEstimator attitude_estimator_;
+    std::mutex attitude_msg_mutex_;
+    umsg_estimation_attitude_t latest_attitude_;
+    bool is_attitude_valid_ = false;
+
     // | ------------------------- methods ------------------------ |
+
+    void translateImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg, umsg_sensors_imu_t &msgImu, rclcpp::Time &sim_time);
+    
+    void translateMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg, umsg_sensors_mag_t &msgMag, rclcpp::Time &sim_time);
+
+    void publishAttitudeEst(const umsg_estimation_attitude_t &msg);
 
     void publishBatteryState(void);
 
@@ -702,6 +728,11 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   local_param_loader.loadParam("outputs/odometry", (bool &)_capabilities_.produces_odometry);
   local_param_loader.loadParam("outputs/ground_truth", (bool &)_capabilities_.produces_ground_truth);
 
+  local_param_loader.loadParam("outputs/orientation_com_filt", (bool&)_publish_orientation_com_filt_);
+  local_param_loader.loadParam("outputs/ang_vel_com_filt", (bool&)_publish_ang_vel_com_filt_);
+
+  local_param_loader.loadParam("outputs/orientation_com_filt_estimate", (bool&)_orietation_output_is_com_filt_estimate_);
+
   _capabilities_.produces_magnetic_field = true;
 
   if (!local_param_loader.loadedSuccessfully()) {
@@ -723,6 +754,10 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   sh_odom_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, "~/simulator_odom_in", &MrsUavFcuApi::callbackOdom, this);
 
   sh_imu_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "~/simulator_imu_in", &MrsUavFcuApi::callbackImu, this);
+
+  sh_imu_noise_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu>(shopts, "~/simulator_imu_noise_in", &MrsUavFcuApi::callbackImuNoise, this);
+
+  sh_mag_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::MagneticField>(shopts, "~/simulator_magnetometer_in", &MrsUavFcuApi::callbackMag, this);
 
   sh_range_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::Range>(shopts, "~/simulator_rangefinder_in", &MrsUavFcuApi::callbackRangefinder, this);
 
@@ -768,6 +803,19 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
     ph_tracker_cmd_ = mrs_lib::PublisherHandler<mrs_msgs::msg::TrackerCommand>(node_, "~/simulator_tracker_cmd_out");
   }
 
+  if (_publish_orientation_com_filt_)
+  {
+    ph_orientation_com_filt_ = mrs_lib::PublisherHandler<geometry_msgs::msg::QuaternionStamped>(node_, "~/orientation_com_filt_out");
+  }
+  
+  if (_publish_ang_vel_com_filt_)
+  {
+    ph_ang_vel_com_filt_ = mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>(node_, "~/ang_vel_com_filt_out");
+  }
+  
+
+        RCLCPP_INFO(node_->get_logger(),"Subscribers and Publishers initialized");
+
   // | ------------------------- timers ------------------------- |
 
   {
@@ -785,7 +833,10 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   // | ----------------------- finish init ---------------------- |
 
   /*Init HITL binder*/
-  hitl_binder_.initialize(node_, local_param_loader, common_handlers);
+  //hitl_binder_.initialize(node_, local_param_loader, common_handlers);
+
+  /*Init attitude estimator*/
+  attitude_estimator_.Init();
 
   RCLCPP_INFO(node_->get_logger(), "initialized");
 
@@ -1148,6 +1199,9 @@ void MrsUavFcuApi::callbackOdom(const nav_msgs::msg::Odometry::ConstSharedPtr ms
 
   auto odom = msg;
 
+  umsg_estimation_attitude_t attitude_msg;
+  bool is_attitude_valid = false;
+
   {
     std::scoped_lock lock(mutex_status_);
 
@@ -1186,12 +1240,40 @@ void MrsUavFcuApi::callbackOdom(const nav_msgs::msg::Odometry::ConstSharedPtr ms
   // | ------------------- publish orientation ------------------ |
 
   if (_capabilities_.produces_orientation) {
-
+  
     geometry_msgs::msg::QuaternionStamped orientation;
-
+  
     orientation.header.stamp    = odom->header.stamp;
     orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
-    orientation.quaternion      = odom->pose.pose.orientation;
+
+    if(false == _orietation_output_is_com_filt_estimate_)
+    {
+      orientation.quaternion = odom->pose.pose.orientation;
+    }
+    else
+    {
+      {
+        std::lock_guard<std::mutex> lock(attitude_msg_mutex_);
+        attitude_msg = latest_attitude_;
+        is_attitude_valid = is_attitude_valid_;
+      }
+
+      if(is_attitude_valid)
+      {
+
+        orientation.quaternion.set__w(static_cast<double>(attitude_msg.w));
+        orientation.quaternion.set__x(static_cast<double>(attitude_msg.x));
+        orientation.quaternion.set__y(static_cast<double>(attitude_msg.y));
+        orientation.quaternion.set__z(static_cast<double>(attitude_msg.z));                          
+      }
+      else 
+      {
+        orientation.quaternion.set__w(static_cast<double>(1.0));
+        orientation.quaternion.set__x(static_cast<double>(0.0));
+        orientation.quaternion.set__y(static_cast<double>(0.0));
+        orientation.quaternion.set__z(static_cast<double>(0.0)); 
+      }
+    }
 
     common_handlers_->publishers.publishOrientation(orientation);
   }
@@ -1225,7 +1307,26 @@ void MrsUavFcuApi::callbackOdom(const nav_msgs::msg::Odometry::ConstSharedPtr ms
   // | -------------------- publish odometry -------------------- |
 
   if (_capabilities_.produces_odometry) {
-    common_handlers_->publishers.publishOdometry(*odom);
+
+    nav_msgs::msg::Odometry odometry = *odom;
+    if(_orietation_output_is_com_filt_estimate_ == true)
+    {
+      if(is_attitude_valid)
+      {
+        odometry.pose.pose.orientation.set__w(static_cast<double>(attitude_msg.w));
+        odometry.pose.pose.orientation.set__x(static_cast<double>(attitude_msg.x));
+        odometry.pose.pose.orientation.set__y(static_cast<double>(attitude_msg.y));
+        odometry.pose.pose.orientation.set__z(static_cast<double>(attitude_msg.z));
+      }
+      else 
+      {
+        odometry.pose.pose.orientation.set__w(static_cast<double>(1.0));
+        odometry.pose.pose.orientation.set__x(static_cast<double>(0.0));
+        odometry.pose.pose.orientation.set__y(static_cast<double>(0.0));
+        odometry.pose.pose.orientation.set__z(static_cast<double>(0.0));
+      }
+    }
+    common_handlers_->publishers.publishOdometry(odometry);
   }
 
   // | ------------------ publish ground truth ------------------ |
@@ -1321,14 +1422,89 @@ void MrsUavFcuApi::callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg) 
     return;
   }
 
-  RCLCPP_INFO_ONCE(node_->get_logger(), "getting IMU");
+  RCLCPP_INFO_ONCE(node_->get_logger(), "IMU CALLBACK called");
 
   if (_capabilities_.produces_imu) {
 
     common_handlers_->publishers.publishIMU(*msg);
   }
 }
+//}
 
+/* callbackImuNoise() //{ */
+
+void MrsUavFcuApi::callbackImuNoise(const sensor_msgs::msg::Imu::ConstSharedPtr msg) {
+
+  if (!is_initialized_) {
+    return;
+  }
+
+  /*Extract time from msg*/
+  rclcpp::Time sim_time = msg->header.stamp;
+
+  umsg_sensors_imu_t msgImu;
+
+  /*Publish Imu*/
+  translateImu(msg, msgImu, sim_time);
+
+  /*Call complementary filter update */
+  bool is_attitude_valid;
+  Eigen::Quaternion<float> q;
+  {
+    std::lock_guard<std::mutex> lock(attitude_est_mutex_);
+    attitude_estimator_.UpdateImu(msgImu);
+    q = attitude_estimator_.GetEstimation(&is_attitude_valid);
+  }
+
+  /*Fill umsg message*/
+  umsg_estimation_attitude_t msgAtt;
+  msgAtt.timestamp = msgImu.timestamp;
+  msgAtt.att_rate[0] = msgImu.gyro[0];
+  msgAtt.att_rate[1] = msgImu.gyro[1];
+  msgAtt.att_rate[2] = msgImu.gyro[2];
+  msgAtt.w = q.w();
+  msgAtt.x = q.x();
+  msgAtt.y = q.y();
+  msgAtt.z = q.z();
+
+  if(is_attitude_valid)
+  {
+    publishAttitudeEst(msgAtt);
+
+    {
+      std::lock_guard<std::mutex> lock(attitude_msg_mutex_);
+      latest_attitude_ = msgAtt;
+      is_attitude_valid_ = is_attitude_valid;
+    }
+  }
+
+  RCLCPP_INFO_ONCE(node_->get_logger(), "IMU NOISE CALLBACK called");
+}
+//}
+
+/* callbackMag()//{ */
+void MrsUavFcuApi::callbackMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg)
+{
+    /*Extract time from msg*/
+    rclcpp::Time sim_time = msg->header.stamp;
+
+    /*Translate magnetometer*/
+    umsg_sensors_mag_t msgMag;
+    translateMag(msg, msgMag, sim_time);
+
+    /*Swap mag direction*/
+    //float mag_x = msgMag.mag[0];
+    //msgMag.mag[0] = msgMag.mag[1];
+    //msgMag.mag[1] = mag_x;
+
+    /*Update attitude estimator*/
+    {
+      std::lock_guard<std::mutex> lock(attitude_est_mutex_);
+      attitude_estimator_.UpdateMag(msgMag);
+    }
+
+    RCLCPP_INFO_ONCE(node_->get_logger(),"[FcuBinder]: MAG CALLBACK called");
+}
 //}
 
 /* callbackRangefinder() //{ */
@@ -1346,8 +1522,6 @@ void MrsUavFcuApi::callbackRangefinder(const sensor_msgs::msg::Range::ConstShare
     common_handlers_->publishers.publishDistanceSensor(*msg);
   }
 }
-
-//}
 
 // | ------------------------- timers ------------------------- |
 
@@ -1371,6 +1545,87 @@ void MrsUavFcuApi::timerMain() {
 //}
 
 // | ------------------------- methods ------------------------ |
+
+// translateImu//{
+void MrsUavFcuApi::translateImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg, umsg_sensors_imu_t &msgImu, rclcpp::Time &sim_time)
+{
+    static double index = 0;
+    /*Set payload*/
+    msgImu.accel[0] = static_cast<float>(msg->linear_acceleration.x / GRAV_CONST);
+    msgImu.accel[1] = static_cast<float>(msg->linear_acceleration.y / GRAV_CONST);
+    msgImu.accel[2] = static_cast<float>(msg->linear_acceleration.z / GRAV_CONST);
+    msgImu.gyro[0] = static_cast<float>(msg->angular_velocity.x);
+    msgImu.gyro[1] = static_cast<float>(msg->angular_velocity.y);
+    msgImu.gyro[2] = static_cast<float>(msg->angular_velocity.z);
+    msgImu.temperature = index;
+    msgImu.timestamp = static_cast<uint64_t>(sim_time.nanoseconds()*1e-3); // Convert to microsecond
+}
+//}
+
+// translateMag//{
+void MrsUavFcuApi::translateMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg, umsg_sensors_mag_t &msgMag, rclcpp::Time &sim_time)
+{
+    /*Set payload*/
+    msgMag.mag[0] = static_cast<float>(msg->magnetic_field.x);
+    msgMag.mag[1] = static_cast<float>(msg->magnetic_field.y);
+    msgMag.mag[2] = static_cast<float>(msg->magnetic_field.z);
+    msgMag.timestamp = static_cast<uint64_t>(sim_time.nanoseconds()*1e-3); // Convert to microseconds
+}
+//}
+
+void MrsUavFcuApi::publishAttitudeEst(const umsg_estimation_attitude_t &msg)
+{
+  if (!is_initialized_)
+  {
+      return;
+  }
+  
+  /*----Publish orientation ----*/
+      geometry_msgs::msg::QuaternionStamped orientation;
+      // Direct 64-bit integer scale to avoid implicit floating-point conversions
+      orientation.header.stamp = rclcpp::Time(static_cast<int64_t>(msg.timestamp) * 1000LL, RCL_ROS_TIME);
+
+      // Zero-allocation assignment using the pre-cached frame identifier
+      orientation.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
+
+      // Mathematical Safety Guard: Enforce normalization to protect downstream estimators
+      Eigen::Quaternion<double> q_eig(
+          static_cast<double>(msg.w),
+          static_cast<double>(msg.x),
+          static_cast<double>(msg.y),
+          static_cast<double>(msg.z)
+      );
+      q_eig.normalize(); 
+
+      // Clean assignment to target ROS message fields
+      orientation.quaternion.x = q_eig.x();
+      orientation.quaternion.y = q_eig.y();
+      orientation.quaternion.z = q_eig.z();
+      orientation.quaternion.w = q_eig.w();
+
+      if(_publish_orientation_com_filt_)
+      {
+        ph_orientation_com_filt_.publish(orientation);
+      }
+      
+  /*---- Publish angular velocity ----*/
+
+      geometry_msgs::msg::Vector3Stamped angular_velocity;
+
+      angular_velocity.header.stamp = rclcpp::Time(static_cast<int64_t>(msg.timestamp) * 1000LL, RCL_ROS_TIME);
+      angular_velocity.header.frame_id = _uav_name_ + "/" + _body_frame_name_;
+      
+      geometry_msgs::msg::Vector3 v;
+      v.x = static_cast<double>(msg.att_rate[0]);
+      v.y = static_cast<double>(msg.att_rate[1]);
+      v.z = static_cast<double>(msg.att_rate[2]);
+      angular_velocity.vector = v;
+
+      if(_publish_ang_vel_com_filt_)
+      {
+        ph_ang_vel_com_filt_.publish(angular_velocity);
+      }
+};
 
 /* publishBatteryState() //{ */
 

@@ -30,8 +30,14 @@ plugin:
     orientation:          true
     velocity:             true
     angular_velocity:     true
-    odometry:             false
+    odometry:             true
     ground_truth:         false
+
+    orientation_com_filt: true
+    ang_vel_com_filt:     true
+
+    orientation_com_filt_estimate: true
+
 
   serial_port: '/dev/ttyACM1'  # "/dev/ttyUSB0" original for FTDI
   baud_rate: 2000000

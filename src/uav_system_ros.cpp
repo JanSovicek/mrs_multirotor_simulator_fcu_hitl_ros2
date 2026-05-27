@@ -287,22 +287,25 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
 
   // | ----------------------- load the rates for publishing ----------------------- |
 
+  double simulation_rate = 0;
   double frequency = 0;
 
+  param_loader.loadParam("simulation_rate", simulation_rate);
+
   param_loader.loadParam("imu_rate", frequency);
-  imu_delay_ = (1.0 / frequency);
+  imu_noise_publish_factor_ = (frequency != 0) ? static_cast<unsigned int>(simulation_rate / frequency) : 0;
 
   param_loader.loadParam("mag_rate", frequency);
-  mag_delay_ = (1.0 / frequency);
+  mag_noise_publish_factor_ = (frequency != 0) ? static_cast<unsigned int>(simulation_rate / frequency) : 0;
 
   param_loader.loadParam("altitude_rate", frequency);
-  altitude_delay_ = (1.0 / frequency);
+  altitude_noise_publish_factor_ = (frequency != 0) ? static_cast<unsigned int>(simulation_rate / frequency) : 0;
 
   param_loader.loadParam("position_rate", frequency);
-  position_delay_ = (1.0/ frequency);
+  odometry_noise_publish_factor_ = (frequency != 0) ? static_cast<unsigned int>(simulation_rate / frequency) : 0;
 
   param_loader.loadParam("range_rate", frequency);
-  range_delay_ = (1.0 / frequency);
+  range_noise_publish_factor_ = (frequency != 0) ? static_cast<unsigned int>(simulation_rate / frequency) : 0;
 
   if (!param_loader.loadedSuccessfully())
   {
@@ -546,20 +549,19 @@ void UavSystemRos::makeStep(const double dt, const double time_stamp) {
   MultirotorModel::State state = uav_system_.getState();
 
   // publish data
-
   publishFCUTF(state);
 
-  // position
-  publishOdometry(state, time_stamp);
+  // mag
+  publishMag(state, time_stamp);
 
   // imu
   publishIMU(state, time_stamp);
 
+  // position
+  publishOdometry(state, time_stamp);
+
   // rangefinder
   publishRangefinder(state, time_stamp);
-
-  // mag
-  publishMag(state, time_stamp);
 
   // altimeter
   publishAltitude(state, time_stamp);
@@ -654,7 +656,7 @@ void UavSystemRos::publishOdometry(const MultirotorModel::State &state, const do
   ph_odom_->publish(odom);
 
   // add the noise
-  if (time_stamp - position_last_stamp_ >= position_delay_)
+  if (time_stamp - odometry_count_ >= odometry_noise_publish_factor_)
   {
       // Use world frame velocity for noise addition, to truly replicate GSP velocity noise, which is independent of the drone's orientation
       odom.twist.twist.linear.x = state.v(0) + velocity_xy_gen_(gen);
@@ -666,7 +668,7 @@ void UavSystemRos::publishOdometry(const MultirotorModel::State &state, const do
       odom.pose.pose.position.z += position_noiseShapers_.at(2).iterate(position_gen_(gen));
 
       ph_odom_noise_->publish(odom);
-      position_last_stamp_ = time_stamp;
+      odometry_count_ = time_stamp;
   }
 }
 
@@ -721,10 +723,12 @@ void UavSystemRos::publishIMU(const MultirotorModel::State &state, const double 
 
   imu.orientation = mrs_lib::AttitudeConverter(state.R);
 
+  imu_count_++;
+
   ph_imu_->publish(imu);
 
-  // add the noise
-  if (time_stamp - imu_last_stamp_ >= imu_delay_)
+  // publish noise version
+  if (imu_count_ >= imu_noise_publish_factor_)
   {      
       imu.angular_velocity.x += gyro_noiseShapers_.at(0).iterate(gyro_xy_gen_(gen));
       imu.angular_velocity.y += gyro_noiseShapers_.at(1).iterate(gyro_xy_gen_(gen));
@@ -734,7 +738,7 @@ void UavSystemRos::publishIMU(const MultirotorModel::State &state, const double 
       imu.linear_acceleration.y += accel_noiseShapers_.at(1).iterate(accel_xy_gen_(gen));
       imu.linear_acceleration.z += accel_noiseShapers_.at(2).iterate(accel_z_gen_(gen));
 
-      imu_last_stamp_ = time_stamp;
+      imu_count_ = 0;
 
       ph_imu_noise_->publish(imu);
   }
@@ -780,14 +784,16 @@ void UavSystemRos::publishRangefinder(const MultirotorModel::State &state, const
   range.radiation_type  = range.INFRARED;
   range.field_of_view   = 0.01;
 
+  range_count_++;
+
   ph_rangefinder_->publish(range);
 
-  // add the noise
-  if (time_stamp - range_last_stamp_ >= range_delay_)
+  // publish noise version
+  if (range_count_ >= range_noise_publish_factor_)
   {
       range.range += range_noiseShaper_.iterate(range_gen_(gen));
+      range_count_ = 0;
       ph_rangefinder_noise_->publish(range); //segfault here
-      range_last_stamp_ = time_stamp;
   }
 
   if (_publish_rangefinder_tf_) {
@@ -827,15 +833,17 @@ void UavSystemRos::publishAltitude(const MultirotorModel::State &state, const do
     odom.pose.pose.position.y = 0;
     odom.pose.pose.position.z = state.x(2);
 
+    altitude_count_++;
+
     ph_altitude_->publish(odom);
 
-    // add the noise
-    if (time_stamp - altitude_last_stamp_ >= altitude_delay_)
+    // publish noise version
+    if (altitude_count_ >= altitude_noise_publish_factor_)
     {
         odom.pose.pose.position.z += altitude_noiseShaper_.iterate(altitude_gen_(gen));
-
+        altitude_count_ = 0;
         ph_altitude_noise_->publish(odom);
-        altitude_last_stamp_ = time_stamp;
+       
     }
 }
 
@@ -858,19 +866,18 @@ void UavSystemRos::publishMag(const MultirotorModel::State &state, const double 
     mag.magnetic_field.y = field.y();
     mag.magnetic_field.z = field.z();
 
-    ph_mag_->publish(mag);
-    // add the noise
+    mag_count_++;
 
-    if (time_stamp - mag_last_stamp_ >= mag_delay_)
+    ph_mag_->publish(mag);
+    
+    // publish noise version
+    if (mag_count_ >= mag_noise_publish_factor_)
     {
         mag.magnetic_field.x += mag_noiseShapers_.at(0).iterate(mag_gen_(gen));
         mag.magnetic_field.y += mag_noiseShapers_.at(1).iterate(mag_gen_(gen));
         mag.magnetic_field.z += mag_noiseShapers_.at(2).iterate(mag_gen_(gen));
-
-        // TODO add the noise to the magnetometer - SOVICJAN - this comment could be deleted
-
+        mag_count_ = 0;
         ph_mag_noise_->publish(mag);
-        mag_last_stamp_ = time_stamp;
     }
 }
 

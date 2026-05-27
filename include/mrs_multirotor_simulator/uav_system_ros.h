@@ -193,17 +193,17 @@ private:
     mrs_lib::IirFilter range_noiseShaper_;
     std::vector<mrs_lib::IirFilter> position_noiseShapers_;
 
-    double imu_delay_;
-    double mag_delay_;
-    double altitude_delay_;
-    double position_delay_;
-    double range_delay_;
+    unsigned int imu_noise_publish_factor_;
+    unsigned int mag_noise_publish_factor_;
+    unsigned int altitude_noise_publish_factor_;
+    unsigned int odometry_noise_publish_factor_;
+    unsigned int range_noise_publish_factor_;
 
-    double imu_last_stamp_;
-    double mag_last_stamp_;
-    double altitude_last_stamp_;
-    double position_last_stamp_;
-    double range_last_stamp_;
+    unsigned int imu_count_;
+    unsigned int mag_count_;
+    unsigned int altitude_count_;
+    unsigned int odometry_count_;
+    unsigned int range_count_;
 
 };
 
