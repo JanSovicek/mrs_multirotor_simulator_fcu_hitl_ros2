@@ -218,14 +218,6 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
   // mag_rate_correction_z_: the P-term nudge towards North (updated at 50Hz)
   Eigen::Vector3f corrected_ang_vel = ang_vel - bias_ang_vel_;
 
-  static uint32_t imu_counter = 0;
-  imu_counter++;
-
-  if (imu_counter % 1000 == 0) { // Print once per second so it doesn't flood the console
-    std::cout << "Mag Corr Z in 1000Hz loop: " << mag_rate_correction_.z() << std::endl;
-    printf("Corrected Ang Vel: [%.4f, %.4f, %.4f]\n", corrected_ang_vel.x(), corrected_ang_vel.y(), corrected_ang_vel.z());
-  }
-
   if(params_.use_mag_correction)
   {
     corrected_ang_vel += mag_rate_correction_;  
@@ -254,12 +246,23 @@ Eigen::Quaternion<float> ComplementaryFilter::iterateFilter(const Eigen::Vector3
     accel_gain = params_.default_accel_gain;
   }
 
+  static uint32_t imu_counter = 0;
+  imu_counter++;
+
+  if(imu_counter % 100 == 0) { // Print 2x per second so it doesn't flood the console
+    printf("Accel Gain: %.6f\n", accel_gain);
+  }
+  
   // calculate gyro gate - instantaneous protection for flight transitions
   float rotation_speed = corrected_ang_vel.norm();
   float gyro_weight = (params_.max_rotation_rate_cutoff >= rotation_speed) ? 1.0f: 0.0f;
   
   // combine the accela nd gyro scaling
   const float combined_scale = accel_gain * gyro_weight;
+
+  if(imu_counter % 100 == 0) { // Print 2x per second so it doesn't flood the console
+    printf("Combined scale: %.6f\n", combined_scale);
+  }
 
   // scale correction by the accel_gain to reduce influence of high-frequency noise
   const Eigen::Quaternion<float> dq_corr_acc_sc = scaleCorrection(dq_corr_acc, combined_scale);

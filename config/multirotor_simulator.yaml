@@ -140,9 +140,9 @@ accel_xy_bias: 0.0 # [m/s^2]
 accel_z_bias: 0.0 # [m/s^2] 
 
 gyro_xy_stddev: 0.80 #0.00155 # [rad/s] (derived from ICM-42688-P datasheet RMS noice density 2.8 mdps/√Hz and 1000 Hz imu rate)
-gyro_xy_bias: 0.001 # [rad/s]
+gyro_xy_bias: 0.01 # [rad/s] # [rad/s] 0.001 from real data after IMU calibration and compensation for bias
 gyro_z_stddev: 0.30 #0.00155 # [rad/s] (derived from ICM-42688-P datasheet RMS noice density 2.8 mdps/√Hz and 1000 Hz imu rate)
-gyro_z_bias: 0.001 # [rad/s]
+gyro_z_bias: -0.01 # [rad/s] 0.001 from real data after IMU calibration and compensation for bias
 
 altitude_stddev: 0.25 # [m] (0.25 estimated from Michal Reiser data, 0.63m derived from LPS22HB datasheet RMS pressure noise 0.0075 hPa)
 altitude_bias: 0.0 # [m]

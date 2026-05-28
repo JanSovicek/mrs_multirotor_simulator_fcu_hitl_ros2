@@ -18,7 +18,7 @@ void AttitudeEstimator::Init() {
         params.bias_alpha    = 1e-4;
 
         params.use_adaptive_gain  = true;
-        params.default_accel_gain = 0.001;//0.003; // value between 0.001 and 0.005, lower value cuts to much accelerometer, higher allows too much noice from accelerometer
+        params.default_accel_gain = 0.00015;//0.0001; //0.001 // value between 0.001 and 0.005, lower value cuts to much accelerometer, higher allows too much noice from accelerometer
 
         params.bottom_accel_error_threshold = 0.05; //0.15; //0.05 // below this error, the full accel correction gain is applied
         params.top_accel_error_threshold    = 0.4; //0.6; // above this error, the accel correction gain is zero, between bottom and top, the gain is scaled linearly
