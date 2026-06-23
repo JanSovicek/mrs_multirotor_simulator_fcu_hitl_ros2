@@ -51,6 +51,7 @@ set(DEPENDENCIES
 )
 
 set(LIBRARIES
+  filt
   uMsgLib
   MrsMultirotorSimulator_HwApiMrsFcu
   MrsMultirotorSimulator_FcuHitlBinder
@@ -140,6 +141,9 @@ ament_target_dependencies(uMsgLib
   ${DEPENDENCIES}
 )
 
+# Filter library 
+add_subdirectory(filt)
+
 # HW API MRS FCU
 # Plugin library for interfacing Simulator with FCU HW
 
@@ -151,6 +155,7 @@ add_library(MrsMultirotorSimulator_HwApiMrsFcu SHARED
 
 target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu
   uMsgLib
+  filt
   )
 
 ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsFcu

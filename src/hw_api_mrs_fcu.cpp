@@ -51,6 +51,7 @@
 #include "umsg_control.h"
 #include "umsg_estimation.h"
 #include "umsg_offboard.h"
+#include "low_pass_filter.hpp"
 
 #include <fmt/ranges.h> // Required for printing arrays/vectors
 
@@ -86,6 +87,10 @@ namespace mrs_uav_fcu_api
 
         rclcpp::CallbackGroup::SharedPtr cbgrp_subs_;
 
+        // Acceleration filter
+        filters::acceleration_filter acc_filt;
+        bool acc_filt_initialized = false;
+        
         // | ----------------------- subscribers ----------------------- |
         mrs_lib::SubscriberHandler<sensor_msgs::msg::Imu> sh_imu_;
         mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry> sh_odom_;
@@ -189,6 +194,11 @@ namespace mrs_uav_fcu_api
         msgImu.timestamp = ser_->RosToFcu(sim_time);
         msgImu.temperature = index;
 
+        //Filter IMU with lowpass 2nd order Butterworth
+      if(true == acc_filt_initialized)
+      {
+        //acc_filt.step(msgImu.accel);
+
         /*Serialize message*/
         uint32_t payload_len = umsg_sensors_imu_serialize(&msgImu, out.s.payload);
 
@@ -201,6 +211,13 @@ namespace mrs_uav_fcu_api
 
         /*Send message*/
         ser_->sendPacket(out);
+      }
+      else 
+      {
+        acc_filt.init(msgImu.accel[0], msgImu.accel[1], msgImu.accel[2]);
+        acc_filt_initialized = true;
+      }
+
     } /*//}*/ /*//}*/
 
     void hitl_binder::publishMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg, rclcpp::Time &sim_time)
