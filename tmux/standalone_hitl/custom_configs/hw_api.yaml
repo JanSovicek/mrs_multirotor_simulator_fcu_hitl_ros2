@@ -5,7 +5,7 @@ plugin:
   simulation: true            # True = simulation mode selected
 
   inputs:
-    actuators: false
+    actuators: true
     control_group: false
     attitude_rate: true
     attitude: true
@@ -23,7 +23,7 @@ plugin:
     imu: true
     altitude: true
     magnetometer_heading: true
-    magnetic_field: false       # Not in your original, added placeholder
+    magnetic_field: true       # Not in your original, added placeholder
     rc_channels: true
     battery_state: true
     position: true

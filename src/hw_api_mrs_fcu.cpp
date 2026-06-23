@@ -32,6 +32,15 @@
 #include <mavros_msgs/mavros_msgs/msg/actuator_control.h>
 #include <mavros_msgs/mavros_msgs/msg/gpsraw.h>
 
+#include "geometry_msgs/msg/quaternion_stamped.hpp"
+#include "mrs_msgs/msg/float64_stamped.hpp"
+#include "mrs_msgs/msg/hw_api_actuator_cmd.hpp"
+#include "mrs_msgs/msg/hw_api_altitude.hpp"
+#include "mrs_msgs/msg/hw_api_attitude_cmd.hpp"
+#include "mrs_msgs/msg/hw_api_attitude_rate_cmd.hpp"
+#include "mrs_msgs/msg/hw_api_capabilities.hpp"
+#include "mrs_msgs/msg/hw_api_position_cmd.hpp"
+#include "mrs_msgs/msg/hw_api_status.hpp"
 #include "serial_api.hpp"
 
 #include <Eigen/Dense>
@@ -43,11 +52,13 @@
 #include "umsg_estimation.h"
 #include "umsg_offboard.h"
 
+#include <fmt/ranges.h> // Required for printing arrays/vectors
+
 //}
 
 /* defines //{ */
 
-#define GRAV_CONST 9.81
+#define GRAV_CONST 9.81665
 #define PWM_MIDDLE 0
 #define PWM_MIN -10000
 #define PWM_MAX 10000
@@ -416,7 +427,7 @@ namespace mrs_uav_fcu_api
                                 if (raw_cmd < DSHOT_MIN_THROTTLE)
                                 {
                                     // Force absolute zero throttle; do not let it go negative or underflow
-                                    cmd.motors[i] = 0.0f;
+                                    cmd.motors.push_back(0.0f);
                                     //cmd.motors.push_back(); 
                                     continue;
                                 }
@@ -429,9 +440,11 @@ namespace mrs_uav_fcu_api
 
                                 // Safe, normalized scaling utilizing the STM32F7 Double-Precision FPU (compiled as float)
                                 // Maps raw [48, 2047] cleanly to [0.0f, 1.0f]
-                                cmd.motors[i] = static_cast<float>(raw_cmd - DSHOT_MIN_THROTTLE) / DSHOT_RANGE_SCALE;
+                                cmd.motors.push_back(static_cast<float>(raw_cmd - DSHOT_MIN_THROTTLE) / DSHOT_RANGE_SCALE);
                                 //cmd.motors.push_back();
                             }
+
+                            ph_actuator_cmd_.publish(cmd);
                             
                         }
                         else 
@@ -509,7 +522,10 @@ namespace mrs_uav_fcu_api
 
         // | ---------------------- publishers ----------------------- |
         // outside of common handlers because of HITL
-        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>   ph_position_fcu_;
+        //std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>    ph_position_fcu_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitudeCmd>>       ph_control_response_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitudeRateCmd>>   ph_attitude_rate_cmd_;
+        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::QuaternionStamped>> ph_altitude_estimate_;
 
         // | ---------------------- subscribers ----------------------- |
 
@@ -542,6 +558,7 @@ namespace mrs_uav_fcu_api
 
         void publishState(const umsg_state_UAV_state_t &msg);
         void publishAttitude(const umsg_estimation_attitude_t &msg);
+        void publishAltitudeEst(const umsg_estimation_altitude_t &msg);
         void publishOdometryLocal(const umsg_estimation_position_t &msg);
         void publishNavsatFix(umsg_sensors_gps_t &msg);
         void publishDistanceSensor(const sensor_msgs::msg::Range::ConstSharedPtr msg); // not yet implemented
@@ -549,7 +566,9 @@ namespace mrs_uav_fcu_api
         void publishMagnetometer(const umsg_sensors_mag_t &msg);
         void publishMagneticField(const umsg_sensors_mag_t &msg);
         void publishRC(const umsg_control_sBusPacket_t &msg);
-        void publishAltitude(const umsg_sensors_altimeter_t &msg);
+        void publishControlResponse(const umsg_control_ControlResponse_t &msg);
+        void publishAttitudeRateCmd(const umsg_control_RateCommand_t &msg);
+        void publishAltitudeSens(const umsg_sensors_altimeter_t &msg);
         void publishGpsStatusRaw(const umsg_sensors_gps_t &msg);
         void publishBattery(); // not yet implemented
 
@@ -677,7 +696,12 @@ namespace mrs_uav_fcu_api
         // | ----------------------- publishers ----------------------- |
 
         //Added for time DEBUGGING
-        ph_position_fcu_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/HITL/FCU_position_raw_time");
+        //ph_position_fcu_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/HITL/FCU_position_raw_time");
+
+        //Added ControlResponse for attitude control tuning
+        ph_control_response_  = std::make_shared<mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitudeCmd>>(node_, "~/FCU/Attitude_control_response") ;
+        ph_attitude_rate_cmd_ = std::make_shared<mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitudeRateCmd>>(node_, "~/FCU/Attitude_rate_command") ;
+        ph_altitude_estimate_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::QuaternionStamped>>(node_, "~/FCU/Altitude_estimate") ;
 
         // | ----------------------- finish init ---------------------- |
 
@@ -1027,6 +1051,33 @@ namespace mrs_uav_fcu_api
 
     //}
 
+    /* callbackAltitudeEst() //{ */
+
+    void MrsUavFcuApi::publishAltitudeEst(const umsg_estimation_altitude_t &msg)
+    {
+        if (!is_initialized_)
+        {
+            return;
+        }
+
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[MrsUavFcuApi]: getting Altitude estimate");
+
+        if (true)
+        {
+            geometry_msgs::msg::QuaternionStamped altitude_est_out;
+
+            altitude_est_out.header.stamp = ser_->FcuToRos(msg.timestamp);
+
+            altitude_est_out.quaternion.set__x(static_cast<const double>(msg.acceleration));
+            altitude_est_out.quaternion.set__y(static_cast<const double>(msg.velocity));
+            altitude_est_out.quaternion.set__z(static_cast<const double>(msg.position));
+            altitude_est_out.quaternion.set__w(static_cast<const double>(msg.is_airborne));
+
+            ph_altitude_estimate_->publish(altitude_est_out);
+        }
+    }
+
+    //}
     /* callbackOdometryLocal() //{ */
 
     void MrsUavFcuApi::publishOdometryLocal(const umsg_estimation_position_t &msg)
@@ -1121,17 +1172,17 @@ namespace mrs_uav_fcu_api
         }
         //Added publisher for FCU time DEBUGING
         //{    
-        geometry_msgs::msg::PointStamped position;
-        //Keep the time unchanged
-        position.header.stamp = rclcpp::Time(static_cast<int64_t>(msg.timestamp)*1e6); // from ms to ns
-        position.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
-        geometry_msgs::msg::Point p;
-        p.x = msg.position[0];
-        p.y = msg.position[1];
-        p.z = msg.position[2];
-        position.point = p;
-        
-        ph_position_fcu_->publish(position);
+        //geometry_msgs::msg::PointStamped position;
+        ////Keep the time unchanged
+        //position.header.stamp = rclcpp::Time(static_cast<int64_t>(msg.timestamp)*1e6); // from ms to ns
+        //position.header.frame_id = _uav_name_ + "/" + _world_frame_name_;
+        //geometry_msgs::msg::Point p;
+        //p.x = msg.position[0];
+        //p.y = msg.position[1];
+        //p.z = msg.position[2];
+        //position.point = p;
+        //
+        //ph_position_fcu_->publish(position);
         //}
     }
 
@@ -1295,9 +1346,75 @@ namespace mrs_uav_fcu_api
 
     //}
 
+
+    /* callback Attitude Control Respose //{ */
+
+    void MrsUavFcuApi::publishControlResponse(const umsg_control_ControlResponse_t &msg)
+    {
+
+        if (!is_initialized_)
+        {
+            return;
+        }
+
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[MrsUavFcuApi]: getting Attitude Control Response");
+
+        if (true)
+        {
+
+            mrs_msgs::msg::HwApiAttitudeCmd attitude_cmd_out;
+
+            attitude_cmd_out.stamp = ser_->FcuToRos(msg.timestamp);
+
+            attitude_cmd_out.orientation.set__w(msg.desired_attitude[0]);
+            attitude_cmd_out.orientation.set__x(msg.desired_attitude[1]);
+            attitude_cmd_out.orientation.set__y(msg.desired_attitude[2]);
+            attitude_cmd_out.orientation.set__z(msg.desired_attitude[3]);
+
+            attitude_cmd_out.throttle = msg.throttle;
+
+            ph_control_response_->publish(attitude_cmd_out);
+        }
+    }
+
+    
+
+    //}
+
+    /* callback Attitude Rate Command //{ */
+
+    void MrsUavFcuApi::publishAttitudeRateCmd(const umsg_control_RateCommand_t &msg)
+    {
+
+        if (!is_initialized_)
+        {
+            return;
+        }
+
+        RCLCPP_INFO_ONCE(node_->get_logger(), "[MrsUavFcuApi]: getting Attitude Control Response");
+
+        if (true)
+        {
+
+            mrs_msgs::msg::HwApiAttitudeRateCmd attitude_rate_cmd_out;
+
+            attitude_rate_cmd_out.stamp = ser_->FcuToRos(msg.timestamp);
+
+            attitude_rate_cmd_out.body_rate.set__x(msg.roll_rate);
+            attitude_rate_cmd_out.body_rate.set__y(msg.pitch_rate);
+            attitude_rate_cmd_out.body_rate.set__z(msg.yaw_rate);
+
+            attitude_rate_cmd_out.throttle = msg.throttle;
+
+            ph_attitude_rate_cmd_->publish(attitude_rate_cmd_out);
+        }
+    }
+
+    //}
+
     /* callbackAltitude() //{ */
 
-    void MrsUavFcuApi::publishAltitude(const umsg_sensors_altimeter_t &msg)
+    void MrsUavFcuApi::publishAltitudeSens(const umsg_sensors_altimeter_t &msg)
     {
 
         if (!is_initialized_)
@@ -1632,7 +1749,7 @@ namespace mrs_uav_fcu_api
                 bool bSuccess = umsg_sensors_altimeter_deserialize(&msgAltimeter, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
                 if(true == bSuccess)
                 {
-                    publishAltitude(msgAltimeter);
+                    publishAltitudeSens(msgAltimeter);
                 }
                 else 
                 {
@@ -1707,6 +1824,47 @@ namespace mrs_uav_fcu_api
                 }
             }
             break;
+
+            case CONTROL_CONTROLRESPONSE:
+            {
+                umsg_control_ControlResponse_t msgControlResponse;
+                bool bSuccess = umsg_control_ControlResponse_deserialize(&msgControlResponse, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+            
+                if(true == bSuccess)
+                {
+                    publishControlResponse(msgControlResponse);
+                    RCLCPP_INFO_ONCE(node_->get_logger(), "CORRECT ControlResponse message: [%s]", fmt::format("{:02X}", fmt::join(reinterpret_cast<const uint8_t*>(&msg), reinterpret_cast<const uint8_t*>(&msg) + msg.s.len, " ")).c_str());
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: ControlResponse message deserialization failed, payload len: %u, expected len: %lu", msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE, UMSG_CONTROL_CONTROLRESPONSE_EXPECTED_LEN);
+                    RCLCPP_INFO(node_->get_logger(), "ControlResponse message: [%s]", fmt::format("{:02X}", fmt::join(reinterpret_cast<const uint8_t*>(&msg), reinterpret_cast<const uint8_t*>(&msg) + msg.s.len, " ")).c_str());
+                }
+            
+            }
+            break;
+
+            case CONTROL_RATECOMMAND:
+            {
+                umsg_control_RateCommand_t msgAttitudeRateCmd;
+                bool bSuccess = umsg_control_RateCommand_deserialize(&msgAttitudeRateCmd, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+            
+                if(true == bSuccess)
+                {
+                    publishAttitudeRateCmd(msgAttitudeRateCmd);
+                    RCLCPP_INFO_ONCE(node_->get_logger(), "CORRECT Attitude rate command message: [%s]", fmt::format("{:02X}", fmt::join(reinterpret_cast<const uint8_t*>(&msg), reinterpret_cast<const uint8_t*>(&msg) + msg.s.len, " ")).c_str());
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Attitude rate command message deserialization failed, payload len: %u, expected len: %lu", msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE, UMSG_CONTROL_RATECOMMAND_EXPECTED_LEN);
+                    RCLCPP_INFO(node_->get_logger(), "Attitude rate command message: [%s]", fmt::format("{:02X}", fmt::join(reinterpret_cast<const uint8_t*>(&msg), reinterpret_cast<const uint8_t*>(&msg) + msg.s.len, " ")).c_str());
+                }
+            
+            }
+            break;
+            
             default:
                 parsed = false;
                 break;
@@ -1745,6 +1903,53 @@ namespace mrs_uav_fcu_api
                 {
                     //Drop the message
                     RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Position estimation message deserialization failed");
+                }
+            }
+            break;
+            case ESTIMATION_ALTITUDE:
+            {
+                umsg_estimation_altitude_t msgAlt;
+                bool bSuccess = umsg_estimation_altitude_deserialize(&msgAlt, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    publishAltitudeEst(msgAlt);
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Position estimation message deserialization failed");
+                }
+            }
+            break;
+            case ESTIMATION_MOTORTHRUSTPARAM:
+            {
+                umsg_estimation_MotorThrustParam_t msgMotorThrsParam;
+                bool bSuccess = umsg_estimation_MotorThrustParam_deserialize(&msgMotorThrsParam, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    //publishMotorThrustParam(msgMotorThrsParam);
+                    //TODO - implement publisher
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Motor thrust param message deserialization failed");
+                }
+            }
+            break;
+            case ESTIMATION_MOTORTHRUSTVERTICAL:
+            {
+                umsg_estimation_MotorThrustVertical_t msgMotorThrustVertical;
+                bool bSuccess = umsg_estimation_MotorThrustVertical_deserialize(&msgMotorThrustVertical, msg.s.payload, msg.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE);
+                if(true == bSuccess)
+                {
+                    //publishMotorThrustVertical(msgMotorThrustVertical);
+                    //TODO - implement publisher
+                }
+                else 
+                {
+                    //Drop the message
+                    RCLCPP_ERROR(node_->get_logger(),"[MrsUavFcuApi]: Motor thrust vertical message deserialization failed");
                 }
             }
             break;

@@ -177,7 +177,8 @@ private:
     std::mt19937 gen;
     std::normal_distribution<double> accel_xy_gen_;
     std::normal_distribution<double> accel_z_gen_;
-    std::normal_distribution<double> gyro_gen_;
+    std::normal_distribution<double> gyro_xy_gen_;
+    std::normal_distribution<double> gyro_z_gen_;
     std::normal_distribution<double> mag_gen_;
     std::normal_distribution<double> altitude_gen_;
     std::normal_distribution<double> position_gen_;
