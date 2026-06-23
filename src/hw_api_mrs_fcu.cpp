@@ -1,5 +1,6 @@
 /* includes //{ */
 
+#include <atomic>
 #include <cstdint>
 #include <rclcpp/rclcpp.hpp>
 
@@ -34,6 +35,7 @@
 
 #include "geometry_msgs/msg/quaternion.hpp"
 #include "geometry_msgs/msg/quaternion_stamped.hpp"
+#include "sensor_msgs/msg/imu.hpp"
 #include "serial_api.hpp"
 
 #include <Eigen/Dense>
@@ -528,6 +530,7 @@ namespace mrs_uav_fcu_api
 
     bool _publish_orientation_com_filt_;
     bool _publish_ang_vel_com_filt_;
+    bool _publish_imu_filtered_;
 
     bool _orietation_output_is_com_filt_estimate_;
 
@@ -606,6 +609,7 @@ namespace mrs_uav_fcu_api
 
     mrs_lib::PublisherHandler<geometry_msgs::msg::QuaternionStamped>      ph_orientation_com_filt_;
     mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>         ph_ang_vel_com_filt_;
+    mrs_lib::PublisherHandler<sensor_msgs::msg::Imu>                      ph_imu_filtered_;
 
     // | ------------------------- timers ------------------------- |
 
@@ -620,12 +624,16 @@ namespace mrs_uav_fcu_api
     std::atomic<bool> armed_     = false;
     std::atomic<bool> connected_ = false;
     std::mutex        mutex_status_;
-
+    
+    //Attitude estimator
     std::mutex attitude_est_mutex_;
     AttitudeEstimator attitude_estimator_;
     std::mutex attitude_msg_mutex_;
     umsg_estimation_attitude_t latest_attitude_;
     bool is_attitude_valid_ = false;
+    /*Create acceleration filter*/
+    filters::acceleration_filter acc_filt_;
+    bool accel_filt_initialized_ = false;
 
     // | ------------------------- methods ------------------------ |
 
@@ -634,6 +642,8 @@ namespace mrs_uav_fcu_api
     void translateMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg, umsg_sensors_mag_t &msgMag, rclcpp::Time &sim_time);
 
     void publishAttitudeEst(const umsg_estimation_attitude_t &msg);
+
+    void publishFilteredImu(const umsg_sensors_imu_t &msg);
 
     void publishBatteryState(void);
 
@@ -730,6 +740,7 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
 
   local_param_loader.loadParam("outputs/orientation_com_filt", (bool&)_publish_orientation_com_filt_);
   local_param_loader.loadParam("outputs/ang_vel_com_filt", (bool&)_publish_ang_vel_com_filt_);
+  local_param_loader.loadParam("outputs/imu_low_pass_filter", (bool&)_publish_imu_filtered_);
 
   local_param_loader.loadParam("outputs/orientation_com_filt_estimate", (bool&)_orietation_output_is_com_filt_estimate_);
 
@@ -812,9 +823,14 @@ void MrsUavFcuApi::initialize(const rclcpp::Node::SharedPtr &node, std::shared_p
   {
     ph_ang_vel_com_filt_ = mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>(node_, "~/ang_vel_com_filt_out");
   }
-  
 
-        RCLCPP_INFO(node_->get_logger(),"Subscribers and Publishers initialized");
+  if (_publish_imu_filtered_)
+  {
+    ph_imu_filtered_ = mrs_lib::PublisherHandler<sensor_msgs::msg::Imu>(node_, "~/IMU_low_pass_filter_out");
+  }
+
+
+  RCLCPP_INFO(node_->get_logger(),"Subscribers and Publishers initialized");
 
   // | ------------------------- timers ------------------------- |
 
@@ -1444,28 +1460,47 @@ void MrsUavFcuApi::callbackImuNoise(const sensor_msgs::msg::Imu::ConstSharedPtr 
 
   umsg_sensors_imu_t msgImu;
 
-  /*Publish Imu*/
+  /*Translate Imu*/
   translateImu(msg, msgImu, sim_time);
 
-  /*Call complementary filter update */
-  bool is_attitude_valid;
-  Eigen::Quaternion<float> q;
+  umsg_estimation_attitude_t msgAtt;
+
+  bool is_attitude_valid = false;
+
+  /*FilterImu - low pass*/
+  if(true == accel_filt_initialized_)
   {
-    std::lock_guard<std::mutex> lock(attitude_est_mutex_);
-    attitude_estimator_.UpdateImu(msgImu);
-    q = attitude_estimator_.GetEstimation(&is_attitude_valid);
+    acc_filt_.step(msgImu.accel);
+  
+    /*Publish filtered IMU*/
+    publishFilteredImu(msgImu);
+
+    Eigen::Quaternion<float> q;
+
+    /*Call complementary filter update */
+    bool is_attitude_valid;
+    {
+      std::lock_guard<std::mutex> lock(attitude_est_mutex_);
+      attitude_estimator_.UpdateImu(msgImu);
+      q = attitude_estimator_.GetEstimation(&is_attitude_valid);
+    }
+
+    /*Fill umsg message*/
+    msgAtt.timestamp = msgImu.timestamp;
+    msgAtt.att_rate[0] = msgImu.gyro[0];
+    msgAtt.att_rate[1] = msgImu.gyro[1];
+    msgAtt.att_rate[2] = msgImu.gyro[2];
+    msgAtt.w = q.w();
+    msgAtt.x = q.x();
+    msgAtt.y = q.y();
+    msgAtt.z = q.z();
+  }
+  else 
+  {
+    acc_filt_.init(msgImu.accel[0], msgImu.accel[1], msgImu.accel[2]);
+    accel_filt_initialized_ = true;
   }
 
-  /*Fill umsg message*/
-  umsg_estimation_attitude_t msgAtt;
-  msgAtt.timestamp = msgImu.timestamp;
-  msgAtt.att_rate[0] = msgImu.gyro[0];
-  msgAtt.att_rate[1] = msgImu.gyro[1];
-  msgAtt.att_rate[2] = msgImu.gyro[2];
-  msgAtt.w = q.w();
-  msgAtt.x = q.x();
-  msgAtt.y = q.y();
-  msgAtt.z = q.z();
 
   if(is_attitude_valid)
   {
@@ -1626,6 +1661,27 @@ void MrsUavFcuApi::publishAttitudeEst(const umsg_estimation_attitude_t &msg)
         ph_ang_vel_com_filt_.publish(angular_velocity);
       }
 };
+
+void MrsUavFcuApi::publishFilteredImu(const umsg_sensors_imu_t &msg)
+{
+  sensor_msgs::msg::Imu imu;
+
+  imu.header.stamp    = rclcpp::Time(static_cast<int64_t>(msg.timestamp) * 1000LL, RCL_ROS_TIME);
+  imu.header.frame_id = _body_frame_name_;
+
+  imu.angular_velocity.x = msg.gyro[0];
+  imu.angular_velocity.y = msg.gyro[1];
+  imu.angular_velocity.z = msg.gyro[2];
+
+  imu.linear_acceleration.x = msg.accel[0]*GRAV_CONST;
+  imu.linear_acceleration.y = msg.accel[1]*GRAV_CONST;
+  imu.linear_acceleration.z = msg.accel[2]*GRAV_CONST;
+
+  if(_publish_imu_filtered_)
+  {
+    ph_imu_filtered_.publish(imu);
+  }
+}
 
 /* publishBatteryState() //{ */
 

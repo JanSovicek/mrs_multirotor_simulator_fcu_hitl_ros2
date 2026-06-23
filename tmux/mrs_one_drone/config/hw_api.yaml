@@ -35,6 +35,7 @@ plugin:
 
     orientation_com_filt: true
     ang_vel_com_filt:     true
+    imu_low_pass_filter:  true
 
     orientation_com_filt_estimate: true
 

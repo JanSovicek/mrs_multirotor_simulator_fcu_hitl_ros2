@@ -11,7 +11,7 @@ uav1:
     heading: 0.0
 
 dynamic:
-  realtime_factor: 0.20 # [-]
+  realtime_factor: 0.25 # [-]
 
 individual_takeoff_platform:
   enabled: false

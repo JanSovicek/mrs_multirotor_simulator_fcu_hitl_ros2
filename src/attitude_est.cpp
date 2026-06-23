@@ -37,24 +37,13 @@ void AttitudeEstimator::Init() {
         params.max_roll_pitch_bias_rad_s = 0.1; // Roll/pitch bias can be higher than yaw bias, especially for low-cost IMUs, but should still be limited to prevent excessive gyro bias during prolonged flight in magnetic disturbances.
 
         p_attitude_filter_ = new attitude_estimation::ComplementaryFilter(params);
-
-        /*Create acceleration filter*/
-        p_acc_filt_ = new filters::acceleration_filter();
  
         return;
 }
 
 void AttitudeEstimator::UpdateImu(umsg_sensors_imu_t& imuMsg) {
 
-    if(first_imu_received_)
-    {
-        p_acc_filt_->init(imuMsg.accel[0], imuMsg.accel[1], imuMsg.accel[2]);
-        first_imu_received_ = false;
-    }
-    else {
-        p_acc_filt_->step(imuMsg.accel);
-        p_attitude_filter_->updateImu(imuMsg);
-    }
+    p_attitude_filter_->updateImu(imuMsg);
 }
 
 void AttitudeEstimator::UpdateMag(umsg_sensors_mag_t& magMsg) {
