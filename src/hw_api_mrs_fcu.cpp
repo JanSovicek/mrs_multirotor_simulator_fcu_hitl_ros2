@@ -43,6 +43,13 @@
 #include "mrs_msgs/msg/hw_api_capabilities.hpp"
 #include "mrs_msgs/msg/hw_api_position_cmd.hpp"
 #include "mrs_msgs/msg/hw_api_status.hpp"
+#include "mrs_multirotor_simulator/msg/altitude_reference.hpp"
+#include "mrs_multirotor_simulator/msg/control_response.hpp"
+#include "mrs_multirotor_simulator/msg/motor_thrust_param.hpp"
+#include "mrs_multirotor_simulator/msg/position.hpp"
+#include "mrs_multirotor_simulator/msg/position_reference.hpp"
+#include "mrs_multirotor_simulator/msg/rate_cmd.hpp"
+#include "mrs_multirotor_simulator/msg/rate_command.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "serial_api.hpp"
 
@@ -561,18 +568,13 @@ namespace mrs_uav_fcu_api
         // | ---------------------- publishers ----------------------- |
         // outside of common handlers because of HITL
         //std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>    ph_position_fcu_;
-        std::shared_ptr<mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitudeCmd>>       ph_control_response_;
-        std::shared_ptr<mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitudeRateCmd>>   ph_attitude_rate_cmd_;
-        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>      ph_thrust_param_estimate_;
-        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>      ph_raw_position_estimate_;
-        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>      ph_raw_velocity_estimate_;
-        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>      ph_raw_acceleration_estimate_;
-        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>      ph_raw_acceleration_bias_;
-        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>      ph_raw_flight_flags_;
-        std::shared_ptr<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>>               ph_position_reference_;
-        std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>>    ph_altitude_reference_;
-
-        std::shared_ptr<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::CpuLoad>> ph_cpu_load_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::ControlResponse>>       ph_control_response_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::RateCommand>>           ph_attitude_rate_cmd_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::Position>>              ph_position_estimate_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::MotorThrustParam>>      ph_thrust_param_estimate_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::CpuLoad>>               ph_cpu_load_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::PositionReference>>     ph_position_reference_;
+        std::shared_ptr<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::AltitudeReference>>     ph_altitude_reference_;
 
         // | ---------------------- subscribers ----------------------- |
 
@@ -750,18 +752,13 @@ namespace mrs_uav_fcu_api
         //ph_position_fcu_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/HITL/FCU_position_raw_time");
 
         //Added ControlResponse for attitude control tuning
-        ph_control_response_  = std::make_shared<mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitudeCmd>>(node_, "~/FCU/Attitude_control_response");
-        ph_attitude_rate_cmd_ = std::make_shared<mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiAttitudeRateCmd>>(node_, "~/FCU/Attitude_rate_command");
-        ph_thrust_param_estimate_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/FCU/Thrust_param_estimate");
-        ph_raw_position_estimate_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/FCU/world_position_estimate");
-        ph_raw_velocity_estimate_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/FCU/world_velocity_estimate");
-        ph_raw_acceleration_estimate_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/FCU/world_acceleration_estimate");
-        ph_raw_acceleration_bias_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/FCU/body_acceleration_bias");
-        ph_raw_flight_flags_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::PointStamped>>(node_, "~/FCU/body_position_flight_flags");
-        ph_position_reference_ = std::make_shared<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>>(node_, "~/FCU/target_reference_position");
-        ph_altitude_reference_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>>(node_, "~/FCU/target_reference_altitude");
-
-        ph_cpu_load_ = std::make_shared<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::CpuLoad>>(node_, "~/FCU/cpu_load");            
+        ph_control_response_        = std::make_shared<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::ControlResponse>>(node_, "~/FCU/Attitude_control_response");
+        ph_attitude_rate_cmd_       = std::make_shared<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::RateCommand>>(node_, "~/FCU/Attitude_rate_command");
+        ph_position_estimate_       = std::make_shared<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::Position>>(node_, "~/FCU/world_position_estimate");
+        ph_thrust_param_estimate_   = std::make_shared<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::MotorThrustParam>>(node_, "~/FCU/Thrust_param_estimate");
+        ph_cpu_load_                = std::make_shared<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::CpuLoad>>(node_, "~/FCU/cpu_load");
+        ph_position_reference_      = std::make_shared<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::PositionReference>>(node_, "~/FCU/target_reference_position");
+        ph_altitude_reference_      = std::make_shared<mrs_lib::PublisherHandler<mrs_multirotor_simulator::msg::AltitudeReference>>(node_, "~/FCU/target_reference_altitude");            
 
         // | ----------------------- finish init ---------------------- |
 
@@ -1125,15 +1122,13 @@ namespace mrs_uav_fcu_api
         if(true)
         {
             /*Declare message*/
-            geometry_msgs::msg::PointStamped thrust_param_out;
+            mrs_multirotor_simulator::msg::MotorThrustParam thrust_param_out;
 
             /*Set timestamp*/
-            thrust_param_out.header.stamp          = ser_->FcuToRos(msg.timestamp);
+            //thrust_param_out.timestamp = ser_->FcuToRos(msg.timestamp);
             
             /*Set data*/
-            thrust_param_out.point.set__x(static_cast<const double>(msg.K));
-            thrust_param_out.point.set__y(static_cast<const double>(msg.K_var));
-            thrust_param_out.point.set__z(static_cast<const double>(msg.K_validity));
+            umsg_to_ros_MotorThrustParam(&msg, thrust_param_out);
 
             /*Publish*/
             ph_thrust_param_estimate_->publish(thrust_param_out);
@@ -1180,50 +1175,16 @@ namespace mrs_uav_fcu_api
         if(true)
         {
             /*Declare messages*/
-            geometry_msgs::msg::PointStamped position_est_out;
-            geometry_msgs::msg::PointStamped velocity_est_out;
-            geometry_msgs::msg::PointStamped acceleration_est_out;
-            geometry_msgs::msg::PointStamped acceleration_bias_est_out;
-            geometry_msgs::msg::PointStamped flight_flags_out;
+            mrs_multirotor_simulator::msg::Position position_est_out;
 
             /*Set timestamp*/
-            position_est_out.header.stamp          = ser_->FcuToRos(msg.timestamp);
-            velocity_est_out.header.stamp          = position_est_out.header.stamp;
-            acceleration_est_out.header.stamp      = position_est_out.header.stamp;
-            acceleration_bias_est_out.header.stamp = position_est_out.header.stamp;
-            flight_flags_out.header.stamp          = position_est_out.header.stamp;
+            //position_est_out.timestamp          = ser_->FcuToRos(msg.timestamp);
 
-            /*Set position*/
-            position_est_out.point.set__x(static_cast<const double>(msg.position[0]));
-            position_est_out.point.set__y(static_cast<const double>(msg.position[1]));
-            position_est_out.point.set__z(static_cast<const double>(msg.position[2]));
-
-            /*Set velocity*/
-            velocity_est_out.point.set__x(static_cast<const double>(msg.velocity[0]));
-            velocity_est_out.point.set__y(static_cast<const double>(msg.velocity[1]));
-            velocity_est_out.point.set__z(static_cast<const double>(msg.velocity[2]));
-
-            /*Set acceleration*/
-            acceleration_est_out.point.set__x(static_cast<const double>(msg.acceleration[0]));
-            acceleration_est_out.point.set__y(static_cast<const double>(msg.acceleration[1]));
-            acceleration_est_out.point.set__z(static_cast<const double>(msg.acceleration[2]));
-
-            /*Set acceleration bias*/
-            acceleration_bias_est_out.point.set__x(static_cast<const double>(msg.acceleration_bias[0]));
-            acceleration_bias_est_out.point.set__y(static_cast<const double>(msg.acceleration_bias[1]));
-            acceleration_bias_est_out.point.set__z(static_cast<const double>(msg.acceleration_bias[2]));
-
-            /*Set flight flags*/
-            flight_flags_out.point.set__x(static_cast<const double>(msg.is_airborne));
-            flight_flags_out.point.set__y(static_cast<const double>(msg.horizontal_valid));
-            flight_flags_out.point.set__z(static_cast<const double>(msg.ekf_teleport_event));
+            /*Set data*/
+            umsg_to_ros_Position(&msg, position_est_out);
 
             /*Publish messages*/
-            ph_raw_position_estimate_->publish(position_est_out);  
-            ph_raw_velocity_estimate_->publish(velocity_est_out);
-            ph_raw_acceleration_estimate_->publish(acceleration_est_out);
-            ph_raw_acceleration_bias_->publish(acceleration_bias_est_out);
-            ph_raw_flight_flags_->publish(flight_flags_out);
+            ph_position_estimate_->publish(position_est_out);  
         }
     }
 
@@ -1512,16 +1473,12 @@ namespace mrs_uav_fcu_api
         if (true)
         {
 
-            mrs_msgs::msg::HwApiAttitudeCmd attitude_cmd_out;
+            mrs_multirotor_simulator::msg::ControlResponse attitude_cmd_out;
+            
+            //attitude_cmd_out.timestamp = ser_->FcuToRos(msg.timestamp);
 
-            attitude_cmd_out.stamp = ser_->FcuToRos(msg.timestamp);
-
-            attitude_cmd_out.orientation.set__w(msg.desired_attitude[0]);
-            attitude_cmd_out.orientation.set__x(msg.desired_attitude[1]);
-            attitude_cmd_out.orientation.set__y(msg.desired_attitude[2]);
-            attitude_cmd_out.orientation.set__z(msg.desired_attitude[3]);
-
-            attitude_cmd_out.throttle = msg.thrust;
+            //Set data
+            umsg_to_ros_ControlResponse(&msg, attitude_cmd_out);
 
             ph_control_response_->publish(attitude_cmd_out);
         }
@@ -1542,17 +1499,12 @@ namespace mrs_uav_fcu_api
 
         if (true)
         {
-            nav_msgs::msg::Odometry position_ref_out;
+            mrs_multirotor_simulator::msg::PositionReference position_ref_out;
 
-            position_ref_out.header.stamp = ser_->FcuToRos(msg.timestamp);
+            //position_ref_out.timestamp = ser_->FcuToRos(msg.timestamp);
 
-            position_ref_out.pose.pose.position.set__x(static_cast<const double>(msg.position[0]));
-            position_ref_out.pose.pose.position.set__y(static_cast<const double>(msg.position[1]));
-            position_ref_out.pose.pose.position.set__z(static_cast<const double>(msg.position[2]));
-
-            position_ref_out.twist.twist.linear.set__x(static_cast<const double>(msg.velocity[0]));
-            position_ref_out.twist.twist.linear.set__y(static_cast<const double>(msg.velocity[0]));
-            position_ref_out.twist.twist.linear.set__z(static_cast<const double>(msg.velocity[0]));
+            //Set data
+            umsg_to_ros_PositionReference(&msg, position_ref_out);
 
             ph_position_reference_->publish(position_ref_out);
         }
@@ -1574,12 +1526,12 @@ namespace mrs_uav_fcu_api
         if (true)
         {
 
-            geometry_msgs::msg::Vector3Stamped altitude_ref_out;
+            mrs_multirotor_simulator::msg::AltitudeReference altitude_ref_out;
 
-            altitude_ref_out.header.stamp = ser_->FcuToRos(msg.timestamp);
+            //altitude_ref_out.timestamp = ser_->FcuToRos(msg.timestamp);
 
-            altitude_ref_out.vector.set__x(static_cast<const double>(msg.position));
-            altitude_ref_out.vector.set__y(static_cast<const double>(msg.velocity));
+            //Set data
+            umsg_to_ros_AltitudeReference(&msg, altitude_ref_out);
 
             ph_altitude_reference_->publish(altitude_ref_out);
         }
@@ -1602,15 +1554,12 @@ namespace mrs_uav_fcu_api
         if (true)
         {
 
-            mrs_msgs::msg::HwApiAttitudeRateCmd attitude_rate_cmd_out;
+            mrs_multirotor_simulator::msg::RateCommand attitude_rate_cmd_out;
 
-            attitude_rate_cmd_out.stamp = ser_->FcuToRos(msg.timestamp);
+            //attitude_rate_cmd_out.timestamp = ser_->FcuToRos(msg.timestamp);
 
-            attitude_rate_cmd_out.body_rate.set__x(msg.roll_rate);
-            attitude_rate_cmd_out.body_rate.set__y(msg.pitch_rate);
-            attitude_rate_cmd_out.body_rate.set__z(msg.yaw_rate);
-
-            attitude_rate_cmd_out.throttle = msg.thrust;
+            //Set data
+            umsg_to_ros_RateCommand(&msg, attitude_rate_cmd_out);
 
             ph_attitude_rate_cmd_->publish(attitude_rate_cmd_out);
         }
