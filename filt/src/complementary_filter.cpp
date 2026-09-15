@@ -24,7 +24,7 @@ Eigen::Quaternion<float> ComplementaryFilter::getEstimation(bool* isValid) {
 }
 
 /*//{ callbackImu() */
-void ComplementaryFilter::updateImu(umsg_sensors_imu_t& imuMsg) {
+void ComplementaryFilter::updateImu(umsg_sensors_Imu_t& imuMsg) {
   if (!is_initialized_) {
     return;
   }
@@ -77,7 +77,7 @@ void ComplementaryFilter::updateImu(umsg_sensors_imu_t& imuMsg) {
 /*//}*/
 
 /*//{ callbackMag() */
-void ComplementaryFilter::updateMag(umsg_sensors_mag_t& magMsg) {
+void ComplementaryFilter::updateMag(umsg_sensors_Mag_t& magMsg) {
   
   if (first_mag_data_) {
     prev_stamp_MAG_ = magMsg.timestamp;

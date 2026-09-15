@@ -24,10 +24,8 @@ endif()
 
 if(ENABLE_COVERAGE)
   message(WARNING "building for coverage, the performance might be limited")
-
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --coverage -fprofile-arcs")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage -fprofile-arcs")
-
   add_definitions("-O1")
   add_definitions("-g")
 endif()
@@ -35,6 +33,8 @@ endif()
 set(DEPENDENCIES
   rclcpp
   rclcpp_components
+  rosidl_default_generators
+  rosidl_typesupport_cpp
   mrs_msgs
   mrs_lib
   pluginlib
@@ -53,7 +53,6 @@ set(DEPENDENCIES
 set(LIBRARIES
   filt
   uMsgLib
-  MrsMultirotorSimulator_HwApiMrsFcu
   MrsMultirotorSimulator_FcuHitlBinder
   MrsMultirotorSimulator_Simulator
   MrsMultirotorSimulator_SimulatorSystemRos
@@ -61,51 +60,7 @@ set(LIBRARIES
 
 set(UMSG_PATH ${CMAKE_CURRENT_DIR}umsg/umsg_lib/umsg_lib)
 
-foreach(DEP IN LISTS DEPENDENCIES)
-  find_package(${DEP} REQUIRED)
-endforeach()
-
-include_directories(
-  include
-  include/mrs_multirotor_simulator
-  include/mrs_multirotor_simulator/uav_system
-  include/mrs_multirotor_simulator/uav_system/controllers
-  ${rclcpp_INCLUDE_DIRS}
-  ${mrs_lib_INCLUDE_DIRS}
-  ${mrs_uav_hw_api_INCLUDE_DIRS}
-  ${UMSG_PATH}/core/inc
-  ${UMSG_PATH}/inc
-)
-
-# ROS Wrapper for the Multirotor UAV System + controllers
-
-add_library(MrsMultirotorSimulator_SimulatorSystemRos SHARED
-  src/uav_system_ros.cpp
-  #src/iir_filter.cpp
-)
-
-ament_target_dependencies(MrsMultirotorSimulator_SimulatorSystemRos
-  ${DEPENDENCIES}
-)
-
-# MRS Simulator
-
-add_library(MrsMultirotorSimulator_Simulator SHARED
-  src/multirotor_simulator.cpp
-)
-
-target_link_libraries(MrsMultirotorSimulator_Simulator
-  MrsMultirotorSimulator_SimulatorSystemRos
-  )
-
-ament_target_dependencies(MrsMultirotorSimulator_Simulator
-  ${DEPENDENCIES}
-)
-
-rclcpp_components_register_nodes(MrsMultirotorSimulator_Simulator PLUGIN "mrs_multirotor_simulator::MultirotorSimulator" EXECUTABLE MrsMultirotorSimulator_Simulator)
-
-
-#Generate uMsgLib source code
+# Generate uMsgLib source code
 execute_process(
     COMMAND bash "${CMAKE_SOURCE_DIR}/scripts/generate_umsg_library.sh"
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
@@ -117,7 +72,63 @@ if(NOT result EQUAL 0)
     message(FATAL_ERROR "Script generate_umsg_library.sh failed with error: ${error}")
 endif()
 
-# UMSG Library
+# Find all dependencies (including umsg_ros_lib)
+foreach(DEP IN LISTS DEPENDENCIES)
+  find_package(${DEP} REQUIRED)
+endforeach()
+
+# Collect and generate ROS 2 message interfaces directly inside this package
+file(GLOB UMSG_ROS_MSGS
+  RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+  CONFIGURE_DEPENDS
+  "umsg/umsg_lib/umsg_ros_lib/msg/*.msg"
+)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  ${UMSG_ROS_MSGS}
+  DEPENDENCIES std_msgs geometry_msgs
+)
+
+# Include directories
+include_directories(
+  include
+  include/mrs_multirotor_simulator
+  include/mrs_multirotor_simulator/uav_system
+  include/mrs_multirotor_simulator/uav_system/controllers
+  ${rclcpp_INCLUDE_DIRS}
+  ${mrs_lib_INCLUDE_DIRS}
+  ${mrs_uav_hw_api_INCLUDE_DIRS}
+  ${UMSG_PATH}/core/inc
+  ${UMSG_PATH}/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/umsg/umsg_lib/umsg_ros_lib/inc
+)
+
+# # --- ROS Wrapper --- for the Multirotor UAV System + controllers
+
+add_library(MrsMultirotorSimulator_SimulatorSystemRos SHARED
+  src/uav_system_ros.cpp
+  #src/iir_filter.cpp
+)
+
+ament_target_dependencies(MrsMultirotorSimulator_SimulatorSystemRos
+  ${DEPENDENCIES}
+)
+
+# --- MRS Simulator ---
+
+add_library(MrsMultirotorSimulator_Simulator SHARED
+  src/multirotor_simulator.cpp
+)
+
+target_link_libraries(MrsMultirotorSimulator_Simulator
+  MrsMultirotorSimulator_SimulatorSystemRos
+  )
+ament_target_dependencies(MrsMultirotorSimulator_Simulator
+  ${DEPENDENCIES}
+  )
+rclcpp_components_register_nodes(MrsMultirotorSimulator_Simulator PLUGIN "mrs_multirotor_simulator::MultirotorSimulator" EXECUTABLE MrsMultirotorSimulator_Simulator)
+
+# --- uMsg C Library ---
 
 #set(UMSG_PORT "POSIX")
 
@@ -136,37 +147,64 @@ add_library(uMsgLib SHARED
 
 #Select POSIX port
 target_sources(uMsgLib PRIVATE ${UMSG_PATH}/core/src/port_posix.c)
-
 ament_target_dependencies(uMsgLib
   ${DEPENDENCIES}
 )
 
-# Filter library 
+# --- Filter library ---
 add_subdirectory(filt)
 
-# HW API MRS FCU
+# --- HW API MRS FCU Plugin ---
 # Plugin library for interfacing Simulator with FCU HW
 
+# --- HW API MRS FCU Plugin ---
 add_library(MrsMultirotorSimulator_HwApiMrsFcu SHARED
   src/hw_api_mrs_fcu.cpp
   src/serial_port.cpp
   src/serial_api.cpp
-  )
+)
 
-target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu
+# Get the typesupport target for custom messages in this package
+rosidl_get_typesupport_target(mrs_sim_cpp_typesupport ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+# Link C++ sub-libraries AND the resolved message typesupport target
+target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE
   uMsgLib
   filt
-  )
-
-ament_target_dependencies(MrsMultirotorSimulator_HwApiMrsFcu
-  ${DEPENDENCIES}
+  "${mrs_sim_cpp_typesupport}"
+  ${PROJECT_NAME}__rosidl_generator_cpp
 )
+
+# Ensure ROS 2 message C++ header generation finishes before building this library
+add_dependencies(MrsMultirotorSimulator_HwApiMrsFcu
+  ${PROJECT_NAME}__rosidl_generator_cpp
+)
+
+# Include generated headers from the root package build directory
+target_include_directories(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE
+  ${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/rosidl_typesupport_cpp
+)
+
+# Manually apply ROS 2 dependencies PRIVATELY
+foreach(DEP IN LISTS DEPENDENCIES)
+  if(${DEP}_TARGETS)
+    target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE ${${DEP}_TARGETS})
+  endif()
+  
+  if(${DEP}_LIBRARIES)
+    target_link_libraries(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE ${${DEP}_LIBRARIES})
+  endif()
+  
+  if(${DEP}_INCLUDE_DIRS)
+    target_include_directories(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE ${${DEP}_INCLUDE_DIRS})
+  endif()
+endforeach()
 
 target_compile_definitions(MrsMultirotorSimulator_HwApiMrsFcu PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
-# FCU HITL Binder
+# --- FCU HITL Binder ---
 # Interfacing FCU with HITL simulation
-
 
 add_library(MrsMultirotorSimulator_FcuHitlBinder SHARED
   src/fcu_hitl_binder.cpp
@@ -176,11 +214,9 @@ add_library(MrsMultirotorSimulator_FcuHitlBinder SHARED
 target_link_libraries(MrsMultirotorSimulator_FcuHitlBinder
   uMsgLib
   )
-
 ament_target_dependencies(MrsMultirotorSimulator_FcuHitlBinder
   ${DEPENDENCIES}
 )
-
 rclcpp_components_register_nodes(MrsMultirotorSimulator_FcuHitlBinder PLUGIN "mrs_hitl_binders::FcuHitlBinder" EXECUTABLE MrsMultirotorSimulator_FcuHitlBinder)
 
 
@@ -205,7 +241,7 @@ rclcpp_components_register_nodes(MrsMultirotorSimulator_FcuHitlBinder PLUGIN "mr
 #pluginlib_export_plugin_description_file(mrs_uav_hw_api plugins.xml)
 
 # Export the HwApi library for pluginlib
-ament_export_libraries(MrsMultirotorSimulator_HwApiMrsFcu)
+# ament_export_libraries(MrsMultirotorSimulator_HwApiMrsFcu)
 
 # Install and register our plugins.xml (ensure plugins.xml is in package root)
 install(
@@ -232,44 +268,23 @@ install(
   RUNTIME DESTINATION bin
 )
 
+# Plugin library install (NO EXPORT KEYWORD)
 install(
-  DIRECTORY include
-  DESTINATION .
+  TARGETS MrsMultirotorSimulator_HwApiMrsFcu
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
-install(
-  DIRECTORY launch
-  DESTINATION share/${PROJECT_NAME}
-)
+install( DIRECTORY include DESTINATION .)
+install( DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+install( DIRECTORY config DESTINATION share/${PROJECT_NAME})
+install( DIRECTORY tmux USE_SOURCE_PERMISSIONS DESTINATION share/${PROJECT_NAME})
+install( DIRECTORY scripts USE_SOURCE_PERMISSIONS DESTINATION lib/${PROJECT_NAME})
 
-install(
-  DIRECTORY config
-  DESTINATION share/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY tmux
-  USE_SOURCE_PERMISSIONS
-  DESTINATION share/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY scripts
-  USE_SOURCE_PERMISSIONS
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-ament_export_include_directories(
-  include
-)
-
-ament_export_targets(
-  export_${PROJECT_NAME} HAS_LIBRARY_TARGET
-)
-
-ament_export_dependencies(
-  ${DEPENDENCIES}
-)
+ament_export_include_directories(include)
+ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
+ament_export_dependencies(${DEPENDENCIES})
 
 ament_package()
 

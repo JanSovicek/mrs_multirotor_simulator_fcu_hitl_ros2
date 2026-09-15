@@ -54,9 +54,9 @@ public:
   /*Returns attitude quaternion in body to world rotation direction*/
   Eigen::Quaternion<float> getEstimation(bool* isValid);
   /*Updates IMU and iterates attitude estimate*/
-  void                     updateImu(umsg_sensors_imu_t& imuMsg);
+  void                     updateImu(umsg_sensors_Imu_t& imuMsg);
   /*Updates magnetometer*/
-  void                     updateMag(umsg_sensors_mag_t& magMsg);
+  void                     updateMag(umsg_sensors_Mag_t& magMsg);
   Eigen::Vector3f          getGyroBias();
   void                     setGyroBias(Eigen::Vector3f bias);
 
@@ -76,7 +76,7 @@ private:
   Eigen::Vector3f          bias_ang_vel_;
 
   // MAGNETOMETER RELATED STUFF
-  umsg_sensors_mag_t mag_msg_;
+  umsg_sensors_Mag_t mag_msg_;
   Eigen::Vector3f mag_rate_correction_;
 
   Eigen::Quaternion<float> q_nwu_to_enu_;

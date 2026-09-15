@@ -66,7 +66,7 @@ SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int b
     umsg_CRCInit();
 }
 
-void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, const rclcpp::Time& arrival_time_steady)
+void SerialApi::calculateDelay(umsg_state_HeartbeatResponse_t heartbeat, const rclcpp::Time& arrival_time_steady)
 {
     auto [start_time_sim, start_time_steady, sequential] = mrs_lib::get_mutexed(mutex_sync_time, sync_time_simulation_ROS_send, sync_time_steady_clock_ROS_send, sequence_number);
 
@@ -94,15 +94,15 @@ void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, const 
     // 5. Gatekeeper: Is this a "Lucky Packet"?
     // We only trust the time calculation if the RTT is close to the physical minimum.
     // (You can maintain a simple min_rtt variable that slowly decays upwards to handle route changes)
-    //if (current_rtt_ms < historical_min_rtt_) historical_min_rtt_ = current_rtt_ms;
+    if (current_rtt_ms < historical_min_rtt_) historical_min_rtt_ = current_rtt_ms;
 
     // Allow a small margin (e.g., 30% or 1ms) above the best-ever RTT
-    //double acceptance_threshold = historical_min_rtt_ * 1.3; 
+    double acceptance_threshold = historical_min_rtt_ * 1.3; 
 
-    //if (current_rtt_ms <= acceptance_threshold) {
+    if (current_rtt_ms <= acceptance_threshold) {
 
         // 6. Calculate Offset relative to SIMULATION TIME
-        //    Offset = (Sim_Arrival) - (FCU_Time) - (One_Way_Delay)
+        // Offset = (Sim_Arrival) - (FCU_Time) - (One_Way_Delay)
         // We assume One_Way_Delay is roughly RTT / 2
         int64_t sim_ns = arrival_time_sim.nanoseconds();
         int64_t fcu_ns = static_cast<int64_t>(heartbeat.timestamp_arrived) * 1000;
@@ -121,10 +121,10 @@ void SerialApi::calculateDelay(umsg_state_heartbeat_response_t heartbeat, const 
         
         RCLCPP_INFO(node_->get_logger(), "[SYNC] Seq: %u, Updated Offset: %ld ns | RTT: %.2f ms", heartbeat.seq_num, smoothed_offset_ns_.load(), current_rtt_ms);
 
-    //} else {
-    //    RCLCPP_WARN(node_->get_logger(), "[SYNC] Seq: %u, Ignored Jittery Packet (RTT: %.2f > Limit: %.2f)", heartbeat.seq_num, current_rtt_ms, acceptance_threshold);
-    //    // We do NOT update smoothed_offset_ns_. We keep using the old stable one.
-    //}
+    } else {
+        RCLCPP_WARN(node_->get_logger(), "[SYNC] Seq: %u, Ignored Jittery Packet (RTT: %.2f > Limit: %.2f)", heartbeat.seq_num, current_rtt_ms, acceptance_threshold);
+        // We do NOT update smoothed_offset_ns_. We keep using the old stable one.
+    }
 }
 
 //Convert ROS Time -> FCU Time (e.g., for sending commands)
@@ -171,7 +171,7 @@ void SerialApi::timerSync()
     auto sequential = mrs_lib::get_mutexed(mutex_sync_time, sequence_number);
 
     umsg_MessageToTransfer msgTransfer;
-    umsg_state_heartbeat_request_t msgHbtRequest;
+    umsg_state_HeartbeatRequest_t msgHbtRequest;
 
     /*uint8_t rawSync[64] = {
     // --- Header (8 bytes) ---
@@ -200,7 +200,7 @@ void SerialApi::timerSync()
     msgHbtRequest.seq_num = sequential;
     msgHbtRequest.timestamp_arrived = 0;
     //Serialize message into payload buffer
-    uint32_t payload_len = umsg_state_heartbeat_request_serialize(&msgHbtRequest, msgTransfer.s.payload);
+    uint32_t payload_len = umsg_state_HeartbeatRequest_serialize(&msgHbtRequest, msgTransfer.s.payload);
     msgTransfer.s.len = UMSG_HEADER_SIZE + payload_len + UMSG_CRC_SIZE;
     msgTransfer.raw[msgTransfer.s.len - 1] = umsg_calcCRC(msgTransfer.raw, msgTransfer.s.len - 1);
 
@@ -591,9 +591,9 @@ void SerialApi::pushMsgToInternalQueue()
     if (recvdMsg_.s.msg_class == UMSG_STATE && recvdMsg_.s.msg_type == STATE_HEARTBEAT_RESPONSE)
     {
         /*Declare response structure*/
-        umsg_state_heartbeat_response_t heartbeat_response;
+        umsg_state_HeartbeatResponse_t heartbeat_response;
         /*Deserialize HEARTBEAT request*/
-        bool bSuccess = umsg_state_heartbeat_response_deserialize(&heartbeat_response, recvdMsg_.s.payload, recvdMsg_.s.len - UMSG_HEADER_SIZE- UMSG_CRC_SIZE);
+        bool bSuccess = umsg_state_HeartbeatResponse_deserialize(&heartbeat_response, recvdMsg_.s.payload, recvdMsg_.s.len - UMSG_HEADER_SIZE- UMSG_CRC_SIZE);
         
         if(true == bSuccess)
         {

@@ -92,7 +92,7 @@ private:
 
     /*Time synchronisation functions*/
     void timerSync();
-    void calculateDelay(umsg_state_heartbeat_response_t heartbeat, const rclcpp::Time& arrival_time_steady);
+    void calculateDelay(umsg_state_HeartbeatResponse_t heartbeat, const rclcpp::Time& arrival_time_steady);
 
     /*RIng bUffer functions*/
     uint32_t    ringBufferFull();
