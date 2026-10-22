@@ -199,8 +199,17 @@ acceleration_filter::acceleration_filter() {
   //float a_arr_flight[] = {1.0f, -1.734725768809275f, 0.7660066009432638f};
 
   // 2nd Order Butterworth Lowpass Filter @ 500Hz Sampling, 30Hz Cutoff
-  float b_arr_flight[3] = {0.02785977f, 0.05571953f, 0.02785977f};
-  float a_arr_flight[3] = {1.0f, -1.47548044f, 0.58691951f};
+  //float b_arr_flight[3] = {0.02785977f, 0.05571953f, 0.02785977f};
+  //float a_arr_flight[3] = {1.0f, -1.47548044f, 0.58691951f};
+
+  // 20Hz Cutoff 2nd-Order Butterworth (1000Hz Sample Rate) - designed for a maximally flat magnitude response in the passband
+  // Standard format: a_0 is assumed to be 1.0 and is omitted from the math
+  //float b_arr_flight[] = {0.0036216815149286417f, 0.007243363029857283f, 0.0036216815149286417f};
+  //float a_arr_flight[] = {1.0f, -1.822694925196308f, 0.8371816512560226f};
+
+  // 20Hz Cutoff 2nd Order Butterworth Lowpass Filter @ 500Hz Sampling
+  float b_arr_flight[3] = {0.013359200027856505f, 0.02671840005571301f, 0.013359200027856505f};
+  float a_arr_flight[3] = {1.0f, -1.6474599810769768f, 0.7008967811884027f};
 
   _lowpass_filter_3D = lowpass_filter3d(b_arr_flight, a_arr_flight);
 }
