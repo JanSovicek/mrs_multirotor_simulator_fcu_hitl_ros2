@@ -228,7 +228,7 @@ namespace mrs_uav_fcu_api
         //Filter IMU with lowpass 2nd order Butterworth
       if(true == acc_filt_initialized)
       {
-        //acc_filt.step(msgImu.accel);
+        acc_filt.step(msgImu.accel);
 
         /*Serialize message*/
         uint32_t payload_len = umsg_sensors_Imu_serialize(&msgImu, out.s.payload);
@@ -1671,9 +1671,9 @@ namespace mrs_uav_fcu_api
 
             Eigen::Quaternion<float> q_eig = Eigen::Quaternion<float>(msg.w, msg.x, msg.y, msg.z).inverse();
             geometry_msgs::msg::Quaternion q;
-            q.x = static_cast<double>(q_eig.x());
-            q.y = static_cast<double>(q_eig.y());
-            q.z = static_cast<double>(q_eig.z());
+            q.x = -static_cast<double>(q_eig.x());
+            q.y = -static_cast<double>(q_eig.y());
+            q.z = -static_cast<double>(q_eig.z());
             q.w = static_cast<double>(q_eig.w());
             orientation.quaternion = q;
 

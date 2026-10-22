@@ -101,18 +101,54 @@ include_directories(
   ${UMSG_PATH}/core/inc
   ${UMSG_PATH}/inc
   ${CMAKE_CURRENT_SOURCE_DIR}/umsg/umsg_lib/umsg_ros_lib/inc
+  #filt/inc
 )
+
+# --- Filter library ---
+add_subdirectory(filt)
 
 # # --- ROS Wrapper --- for the Multirotor UAV System + controllers
 
+##add_library(MrsMultirotorSimulator_SimulatorSystemRos SHARED
+##  src/uav_system_ros.cpp
+##  #src/iir_filter.cpp
+##)
+##
+##ament_target_dependencies(MrsMultirotorSimulator_SimulatorSystemRos
+##  ${DEPENDENCIES}
+##)
+##
+##target_link_libraries(MrsMultirotorSimulator_SimulatorSystemRos
+##  PUBLIC filt
+##)
+
+
+# --- ROS Wrapper --- for the Multirotor UAV System + controllers
+
 add_library(MrsMultirotorSimulator_SimulatorSystemRos SHARED
   src/uav_system_ros.cpp
-  #src/iir_filter.cpp
 )
 
-ament_target_dependencies(MrsMultirotorSimulator_SimulatorSystemRos
-  ${DEPENDENCIES}
+# Link C++ sub-libraries AND the resolved message typesupport target
+target_link_libraries(MrsMultirotorSimulator_SimulatorSystemRos PUBLIC
+  filt
 )
+
+# Manually apply ROS 2 dependencies PRIVATELY
+foreach(DEP IN LISTS DEPENDENCIES)
+  if(${DEP}_TARGETS)
+    target_link_libraries(MrsMultirotorSimulator_SimulatorSystemRos PRIVATE ${${DEP}_TARGETS})
+  endif()
+  
+  if(${DEP}_LIBRARIES)
+    target_link_libraries(MrsMultirotorSimulator_SimulatorSystemRos PRIVATE ${${DEP}_LIBRARIES})
+  endif()
+  
+  if(${DEP}_INCLUDE_DIRS)
+    target_include_directories(MrsMultirotorSimulator_SimulatorSystemRos PRIVATE ${${DEP}_INCLUDE_DIRS})
+  endif()
+endforeach()
+
 
 # --- MRS Simulator ---
 
@@ -120,12 +156,13 @@ add_library(MrsMultirotorSimulator_Simulator SHARED
   src/multirotor_simulator.cpp
 )
 
-target_link_libraries(MrsMultirotorSimulator_Simulator
-  MrsMultirotorSimulator_SimulatorSystemRos
-  )
 ament_target_dependencies(MrsMultirotorSimulator_Simulator
   ${DEPENDENCIES}
-  )
+)
+
+target_link_libraries(MrsMultirotorSimulator_Simulator
+  MrsMultirotorSimulator_SimulatorSystemRos
+)
 rclcpp_components_register_nodes(MrsMultirotorSimulator_Simulator PLUGIN "mrs_multirotor_simulator::MultirotorSimulator" EXECUTABLE MrsMultirotorSimulator_Simulator)
 
 # --- uMsg C Library ---
@@ -150,9 +187,6 @@ target_sources(uMsgLib PRIVATE ${UMSG_PATH}/core/src/port_posix.c)
 ament_target_dependencies(uMsgLib
   ${DEPENDENCIES}
 )
-
-# --- Filter library ---
-add_subdirectory(filt)
 
 # --- HW API MRS FCU Plugin ---
 # Plugin library for interfacing Simulator with FCU HW
@@ -213,6 +247,7 @@ add_library(MrsMultirotorSimulator_FcuHitlBinder SHARED
 
 target_link_libraries(MrsMultirotorSimulator_FcuHitlBinder
   uMsgLib
+  filt
   )
 ament_target_dependencies(MrsMultirotorSimulator_FcuHitlBinder
   ${DEPENDENCIES}

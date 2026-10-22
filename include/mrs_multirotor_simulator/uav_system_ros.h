@@ -35,6 +35,7 @@
 
 #include <random>
 #include <mrs_lib/iir_filter.h>
+#include "high_pass_filter.hpp"
 
 namespace mrs_multirotor_simulator
 {
@@ -112,6 +113,7 @@ private:
   std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs::msg::Range>> ph_rangefinder_;
   std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs::msg::MagneticField>> ph_mag_;
   std::shared_ptr<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>> ph_altitude_;
+  std::shared_ptr<mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>> ph_world_velocity_;
 
   std::shared_ptr<mrs_lib::PublisherHandler<sensor_msgs::msg::Imu>>            ph_imu_noise_;
   std::shared_ptr<mrs_lib::PublisherHandler<nav_msgs::msg::Odometry>>          ph_odom_noise_;
@@ -126,6 +128,7 @@ private:
   void publishRangefinder(const MultirotorModel::State& state, const double time_stamp);
   void publishMag(const MultirotorModel::State& state, const double time_stamp);
   void publishAltitude(const MultirotorModel::State& state, const double time_stamp);
+  void publishWorldVelocity(const MultirotorModel::State &state);
 
   void timeoutInput(void);
 
@@ -192,6 +195,8 @@ private:
     mrs_lib::IirFilter altitude_noiseShaper_;
     mrs_lib::IirFilter range_noiseShaper_;
     std::vector<mrs_lib::IirFilter> position_noiseShapers_;
+    filters::HighPassFilter accel_highPassFilter_;
+
 
     double imu_delay_;
     double mag_delay_;

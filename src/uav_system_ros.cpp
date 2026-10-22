@@ -1,3 +1,6 @@
+#include "geometry_msgs/msg/quaternion.hpp"
+#include "geometry_msgs/msg/quaternion_stamped.hpp"
+#include "geometry_msgs/msg/vector3_stamped.hpp"
 #include <uav_system_ros.h>
 #include <math.h>
 
@@ -317,6 +320,7 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
   bool pub_rangefinder_enabled;
   bool pub_altitude_enabled;
   bool pub_mag_enabled;
+  bool pub_world_velocity_enabled;
 
   bool pub_imu_noise_enabled;
   bool pub_odom_noise_enabled;
@@ -329,6 +333,7 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
   param_loader.loadParam("publishers/rangefinder/enabled", pub_rangefinder_enabled);
   param_loader.loadParam("publishers/altitude/enabled", pub_altitude_enabled);
   param_loader.loadParam("publishers/magnetometer/enabled", pub_mag_enabled);
+  param_loader.loadParam("publishers/world_velocity/enabled",  pub_world_velocity_enabled);
 
   param_loader.loadParam("publishers/imu_noise/enabled", pub_imu_noise_enabled);
   param_loader.loadParam("publishers/odometry_noise/enabled", pub_odom_noise_enabled);
@@ -362,6 +367,11 @@ UavSystemRos::UavSystemRos(const UavSystemRos_CommonHandlers_t common_handlers)
   if (pub_mag_enabled) {
     ph_mag_ = std::make_shared<mrs_lib::PublisherHandler<sensor_msgs::msg::MagneticField>>(node_, "~/" + _uav_name_ + "/magnetometer");
   }
+
+  if (pub_world_velocity_enabled)
+  {
+    ph_world_velocity_ = std::make_shared<mrs_lib::PublisherHandler<geometry_msgs::msg::Vector3Stamped>>(node_, "~/" + _uav_name_ + "/world_velocity");
+  } 
 
   /*Sensor noise publishers*/
 
@@ -561,6 +571,9 @@ void UavSystemRos::makeStep(const double dt, const double time_stamp) {
   // mag
   publishMag(state, time_stamp);
 
+  // world velocity
+  publishWorldVelocity(state);
+
   // altimeter
   publishAltitude(state, time_stamp);
 
@@ -656,6 +669,7 @@ void UavSystemRos::publishOdometry(const MultirotorModel::State &state, const do
   // add the noise
   if (time_stamp - position_last_stamp_ >= position_delay_)
   {
+      // Odometry noise channel has velocity in world frame like a GPS module
       // Use world frame velocity for noise addition, to truly replicate GSP velocity noise, which is independent of the drone's orientation
       odom.twist.twist.linear.x = state.v(0) + velocity_xy_gen_(gen);
       odom.twist.twist.linear.y = state.v(1) + velocity_xy_gen_(gen);
@@ -730,9 +744,12 @@ void UavSystemRos::publishIMU(const MultirotorModel::State &state, const double 
       imu.angular_velocity.y += gyro_noiseShapers_.at(1).iterate(gyro_xy_gen_(gen));
       imu.angular_velocity.z += gyro_noiseShapers_.at(2).iterate(gyro_z_gen_(gen));
 
-      imu.linear_acceleration.x += accel_noiseShapers_.at(0).iterate(accel_xy_gen_(gen));
-      imu.linear_acceleration.y += accel_noiseShapers_.at(1).iterate(accel_xy_gen_(gen));
-      imu.linear_acceleration.z += accel_noiseShapers_.at(2).iterate(accel_z_gen_(gen));
+      double hp_noise_x, hp_noise_y, hp_noise_z;
+      accel_highPassFilter_.update3D(accel_xy_gen_(gen), accel_xy_gen_(gen), accel_z_gen_(gen), hp_noise_x, hp_noise_y, hp_noise_z);
+
+      imu.linear_acceleration.x += accel_noiseShapers_.at(0).iterate(hp_noise_x);
+      imu.linear_acceleration.y += accel_noiseShapers_.at(1).iterate(hp_noise_y);
+      imu.linear_acceleration.z += accel_noiseShapers_.at(2).iterate(hp_noise_z);
 
       imu_last_stamp_ = time_stamp;
 
@@ -845,7 +862,6 @@ void UavSystemRos::publishAltitude(const MultirotorModel::State &state, const do
 
 void UavSystemRos::publishMag(const MultirotorModel::State &state, const double time_stamp)
 {
-    // TODO implement this - SOVICJAN - this comment could be deleted
 
     sensor_msgs::msg::MagneticField mag;
 
@@ -859,7 +875,6 @@ void UavSystemRos::publishMag(const MultirotorModel::State &state, const double 
     mag.magnetic_field.z = field.z();
 
     ph_mag_->publish(mag);
-    // add the noise
 
     if (time_stamp - mag_last_stamp_ >= mag_delay_)
     {
@@ -867,11 +882,27 @@ void UavSystemRos::publishMag(const MultirotorModel::State &state, const double 
         mag.magnetic_field.y += mag_noiseShapers_.at(1).iterate(mag_gen_(gen));
         mag.magnetic_field.z += mag_noiseShapers_.at(2).iterate(mag_gen_(gen));
 
-        // TODO add the noise to the magnetometer - SOVICJAN - this comment could be deleted
-
         ph_mag_noise_->publish(mag);
         mag_last_stamp_ = time_stamp;
     }
+}
+
+//}
+
+/* publishWorldVelocity*/ //{*/
+
+void UavSystemRos::publishWorldVelocity(const MultirotorModel::State &state)
+{
+  geometry_msgs::msg::Vector3Stamped world_vel;
+
+  world_vel.header.stamp = time_stamp_;
+  world_vel.header.frame_id = _frame_fcu_;
+
+  world_vel.vector.set__x(state.v(0));
+  world_vel.vector.set__y(state.v(1));
+  world_vel.vector.set__z(state.v(2));
+
+  ph_world_velocity_->publish(world_vel);
 }
 
 //}
