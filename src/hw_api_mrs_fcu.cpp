@@ -1,6 +1,7 @@
 /* includes //{ */
 
 #include <cstdint>
+#include <deque>
 #include <rclcpp/rclcpp.hpp>
 
 #include <mrs_uav_hw_api/api.h>
@@ -105,6 +106,10 @@ namespace mrs_uav_fcu_api
         filters::acceleration_filter acc_filt;
         bool acc_filt_initialized = false;
 
+        // GPS latency emulation - real GPS data arrives ~100 ms after the measurement epoch and is stamped by the FCU on arrival
+        double gps_delay_s_ = 0.0;
+        std::deque<nav_msgs::msg::Odometry::ConstSharedPtr> gps_buffer_;
+
         //Acceleration conversions constrains
         //Realistic operational boundaries in G-forces and Radians/sec
         const float MAX_ACCEL_G = 16.0f; // Clamp at 16G (standard IMU limit)
@@ -150,6 +155,7 @@ namespace mrs_uav_fcu_api
 
         param_loader.loadParam("start_latitude", startLat);
         param_loader.loadParam("start_longitude", startLon);
+        param_loader.loadParam("gps_delay_s", gps_delay_s_, 0.0);
 
 
         if (!param_loader.loadedSuccessfully()) 
@@ -376,9 +382,31 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        /*Get time from msg and publish gps*/
+        /*Get time from msg*/
         rclcpp::Time sim_time = msg->header.stamp;
-        publishGps(msg, sim_time);
+
+        /*Simulation time went backwards (sim restart) - drop stale samples*/
+        if (!gps_buffer_.empty() && sim_time < rclcpp::Time(gps_buffer_.back()->header.stamp))
+        {
+            gps_buffer_.clear();
+        }
+        gps_buffer_.push_back(msg);
+
+        /*Keep only the newest sample that is at least gps_delay_s_ old at the front*/
+        const rclcpp::Time delayed_time = sim_time - rclcpp::Duration::from_seconds(gps_delay_s_);
+        while (gps_buffer_.size() > 1 && rclcpp::Time(gps_buffer_[1]->header.stamp) <= delayed_time)
+        {
+            gps_buffer_.pop_front();
+        }
+
+        /*Not enough history yet (startup)*/
+        if (rclcpp::Time(gps_buffer_.front()->header.stamp) > delayed_time)
+        {
+            return;
+        }
+
+        /*Publish delayed data stamped with current time - replicates FCU stamping GPS data on arrival*/
+        publishGps(gps_buffer_.front(), sim_time);
         RCLCPP_INFO_ONCE(node_->get_logger(), "[HITLBinder]: GPS CALLBACK called");
     }
 

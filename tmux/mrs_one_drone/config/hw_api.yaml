@@ -38,3 +38,5 @@ plugin:
 
   start_latitude: 15.2
   start_longitude: 14.3
+
+  gps_delay_s: 0.0 # [s] emulated GPS latency, delayed data are sent with current timestamp (as FCU stamps GPS on arrival)

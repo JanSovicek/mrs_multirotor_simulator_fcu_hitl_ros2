@@ -10,12 +10,12 @@ x500:
   propulsion:
 
     # force [N] = force_constant * rpm^2
-    force_constant: 0.00000027087
+    force_constant: 0.000000392 #0.00000027087
 
     # moment [Nm] = moment_constant * force [N]
-    moment_constant: 0.07
+    moment_constant: 0.07 
 
-    prop_radius: 0.15 # [m]
+    prop_radius: 0.177 #0.15 # [m]
 
     # allocation motors -> moments
 
@@ -32,5 +32,5 @@ x500:
     ]
 
     rpm:
-      min: 1170.0 # [revolutions/minute]
-      max: 7800.0 # [revolutions/minute]
+      min: 0.0  # [revolutions/minute]
+      max: 7408.0 # [revolutions/minute]
