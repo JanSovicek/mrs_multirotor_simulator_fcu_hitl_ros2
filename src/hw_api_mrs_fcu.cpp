@@ -1,5 +1,6 @@
 /* includes //{ */
 
+#include <atomic>
 #include <cstdint>
 #include <deque>
 #include <rclcpp/rclcpp.hpp>
@@ -7,6 +8,8 @@
 #include <mrs_uav_hw_api/api.h>
 
 #include <std_srvs/std_srvs/srv/trigger.h>
+#include <std_srvs/srv/set_bool.hpp>
+#include <std_msgs/msg/u_int8.hpp>
 
 #include <mrs_modules_msgs/mrs_modules_msgs/msg/bestpos.hpp>
 
@@ -110,6 +113,22 @@ namespace mrs_uav_fcu_api
         double gps_delay_s_ = 0.0;
         std::deque<nav_msgs::msg::Odometry::ConstSharedPtr> gps_buffer_;
 
+        // GPS fault injection for testing (services ~/hitl/gps_no_gps and ~/hitl/gps_corrupted, keyboard script gps_toggle.py)
+        enum GpsFaultMode : uint8_t
+        {
+            GPS_NORMAL    = 0, // regular GPS messages
+            GPS_NO_GPS    = 1, // no GPS messages sent at all (receiver/cable loss)
+            GPS_CORRUPTED = 2  // GPS messages sent, but flagged invalid by the receiver (fix lost, few satellites)
+        };
+        std::atomic<uint8_t> gps_fault_mode_{GPS_NORMAL};
+        rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr srv_gps_no_gps_;
+        rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr srv_gps_corrupted_;
+        rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr pub_gps_mode_;
+
+        void setGpsFaultMode(const uint8_t mode, std::shared_ptr<std_srvs::srv::SetBool::Response> response);
+        static const char* gpsFaultModeName(const uint8_t mode);
+        void publishGpsFaultMode();
+
         //Acceleration conversions constrains
         //Realistic operational boundaries in G-forces and Radians/sec
         const float MAX_ACCEL_G = 16.0f; // Clamp at 16G (standard IMU limit)
@@ -188,8 +207,57 @@ namespace mrs_uav_fcu_api
         /*Initialize publishers*/
         ph_actuator_cmd_ = mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd>(node_, "~/hitl/actuators_cmd");
 
+        /*GPS fault injection - mode topic is latched so a (re)started keyboard script learns the current mode*/
+        pub_gps_mode_ = node_->create_publisher<std_msgs::msg::UInt8>("~/hitl/gps_fault_mode", rclcpp::QoS(1).reliable().transient_local());
+
+        srv_gps_no_gps_ = node_->create_service<std_srvs::srv::SetBool>("~/hitl/gps_no_gps",
+            [this](const std::shared_ptr<std_srvs::srv::SetBool::Request> request, std::shared_ptr<std_srvs::srv::SetBool::Response> response)
+            { setGpsFaultMode(request->data ? GPS_NO_GPS : GPS_NORMAL, response); });
+
+        srv_gps_corrupted_ = node_->create_service<std_srvs::srv::SetBool>("~/hitl/gps_corrupted",
+            [this](const std::shared_ptr<std_srvs::srv::SetBool::Request> request, std::shared_ptr<std_srvs::srv::SetBool::Response> response)
+            { setGpsFaultMode(request->data ? GPS_CORRUPTED : GPS_NORMAL, response); });
+
+        publishGpsFaultMode();
+        RCLCPP_INFO(node_->get_logger(), "GPS fault injection services: %s, %s", srv_gps_no_gps_->get_service_name(), srv_gps_corrupted_->get_service_name());
+
         RCLCPP_INFO(node_->get_logger(),"Subscribers and Publishers initialized");
     };
+
+    /*| ------------------------ GPS fault injection ------------------------ |*/
+
+    const char* hitl_binder::gpsFaultModeName(const uint8_t mode)
+    {
+        switch (mode)
+        {
+            case GPS_NORMAL:    return "NORMAL";
+            case GPS_NO_GPS:    return "NO GPS";
+            case GPS_CORRUPTED: return "CORRUPTED";
+            default:            return "UNKNOWN";
+        }
+    }
+
+    void hitl_binder::setGpsFaultMode(const uint8_t mode, std::shared_ptr<std_srvs::srv::SetBool::Response> response)
+    {
+        const uint8_t old_mode = gps_fault_mode_.exchange(mode);
+
+        if (old_mode != mode)
+        {
+            RCLCPP_WARN(node_->get_logger(), "[HITLBinder]: GPS fault mode %s -> %s", gpsFaultModeName(old_mode), gpsFaultModeName(mode));
+        }
+
+        publishGpsFaultMode();
+
+        response->success = true;
+        response->message = gpsFaultModeName(mode);
+    }
+
+    void hitl_binder::publishGpsFaultMode()
+    {
+        std_msgs::msg::UInt8 msg;
+        msg.data = gps_fault_mode_.load();
+        pub_gps_mode_->publish(msg);
+    }
 
     /*| ------------------------- Publishers ------------------------- |*/
 
@@ -362,6 +430,18 @@ namespace mrs_uav_fcu_api
         msgGps.vel[2] = -msg->twist.twist.linear.z;
         msgGps.sAcc = 0.2;
 
+        /*GPS fault injection - receiver lost the fix: the packet arrives, but the receiver flags it as invalid*/
+        if (GPS_CORRUPTED == gps_fault_mode_.load())
+        {
+            msgGps.fixType   = NO_FIX;
+            msgGps.numSV     = 3;
+            msgGps.DataValid = 0;
+            msgGps.gnssFixOk = 0;
+            msgGps.hAcc      = 50.0;
+            msgGps.vAcc      = 50.0;
+            msgGps.sAcc      = 10.0;
+        }
+
         /*Serialize message*/
         uint32_t payload_len = umsg_sensors_Gps_serialize(&msgGps, out.s.payload);
 
@@ -401,6 +481,16 @@ namespace mrs_uav_fcu_api
 
         /*Not enough history yet (startup)*/
         if (rclcpp::Time(gps_buffer_.front()->header.stamp) > delayed_time)
+        {
+            return;
+        }
+
+        /*Mode topic is also published periodically so it can be plotted against the FCU flags (e.g. in PlotJuggler)*/
+        publishGpsFaultMode();
+
+        /*GPS fault injection - no GPS message at all. The delay buffer above is still maintained, so no burst of stale
+        samples is sent when the GPS is switched back on*/
+        if (GPS_NO_GPS == gps_fault_mode_.load())
         {
             return;
         }

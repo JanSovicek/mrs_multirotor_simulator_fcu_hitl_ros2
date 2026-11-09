@@ -33,6 +33,10 @@ windows:
       layout: tiled
       panes:
         - 'history -s ./goto.py'
+  - gps:
+      layout: tiled
+      panes:
+        - until ros2 service list | grep -q "/uav1/hw_api/hitl/gps_no_gps"; do sleep 0.5; done; ./gps_toggle.py
   - juggler:
       layout: tiled
       panes:

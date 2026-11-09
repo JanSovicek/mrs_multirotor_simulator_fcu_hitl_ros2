@@ -41,6 +41,7 @@ set(DEPENDENCIES
   geometry_msgs
   nav_msgs
   std_msgs
+  std_srvs
   sensor_msgs
   mrs_uav_hw_api
   Eigen3
