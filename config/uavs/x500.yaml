@@ -10,7 +10,7 @@ x500:
   propulsion:
 
     # force [N] = force_constant * rpm^2
-    force_constant: 0.000000392 #0.00000027087
+    force_constant: 0.000000392
 
     # moment [Nm] = moment_constant * force [N]
     moment_constant: 0.07 

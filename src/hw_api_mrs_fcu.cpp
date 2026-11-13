@@ -109,7 +109,8 @@ namespace mrs_uav_fcu_api
         filters::acceleration_filter acc_filt;
         bool acc_filt_initialized = false;
 
-        // GPS latency emulation - real GPS data arrives ~100 ms after the measurement epoch and is stamped by the FCU on arrival
+        // GPS latency emulation - real GPS data arrives ~100 ms after the measurement epoch, the FCU GPS driver stamps it with
+        // the measurement time (reception time of the first byte minus the receiver latency)
         double gps_delay_s_ = 0.0;
         std::deque<nav_msgs::msg::Odometry::ConstSharedPtr> gps_buffer_;
 
@@ -150,7 +151,7 @@ namespace mrs_uav_fcu_api
         void publishImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg, rclcpp::Time &sim_time);
         void publishMag(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg, rclcpp::Time &sim_time);
         void publishAltitude(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time);
-        void publishGps(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time);
+        void publishGps(const nav_msgs::msg::Odometry::ConstSharedPtr msg, const rclcpp::Time &measurement_time);
 
         // | ----------------------- publishers ----------------------- |
         mrs_lib::PublisherHandler<mrs_msgs::msg::HwApiActuatorCmd> ph_actuator_cmd_;
@@ -380,7 +381,7 @@ namespace mrs_uav_fcu_api
         ser_->sendPacket(out);
     }
 
-    void hitl_binder::publishGps(const nav_msgs::msg::Odometry::ConstSharedPtr msg, rclcpp::Time &sim_time)
+    void hitl_binder::publishGps(const nav_msgs::msg::Odometry::ConstSharedPtr msg, const rclcpp::Time &measurement_time)
     {
         /*Set header*/
         umsg_MessageToTransfer out;
@@ -393,7 +394,7 @@ namespace mrs_uav_fcu_api
         umsg_sensors_Gps_t msgGps;
 
         /*Set payload*/
-        msgGps.timestamp = ser_->RosToFcu(sim_time);
+        msgGps.timestamp = ser_->RosToFcu(measurement_time);
         //RCLCPP_INFO(node_->get_logger(),"[HITL BINDER] GPS ros time: %ld ns, GPS FCU time: %u ms", sim_time.nanoseconds(), out.s.sensors.gps.timestamp);
         msgGps.fixType = FIX_3D;
         msgGps.hELPS = msg->pose.pose.position.z;
@@ -411,7 +412,7 @@ namespace mrs_uav_fcu_api
         /*Set payload*/
         msgGps.lat = lat;
         msgGps.lon = lon;
-        msgGps.hAcc = 0.5;
+        msgGps.hAcc = 1.0;
         msgGps.vAcc = 0.5;
 
         msgGps.CRCValid = 1;
@@ -428,7 +429,7 @@ namespace mrs_uav_fcu_api
         msgGps.vel[0] = msg->twist.twist.linear.y;
         msgGps.vel[1] = msg->twist.twist.linear.x;
         msgGps.vel[2] = -msg->twist.twist.linear.z;
-        msgGps.sAcc = 0.2;
+        msgGps.sAcc = 0.5;
 
         /*GPS fault injection - receiver lost the fix: the packet arrives, but the receiver flags it as invalid*/
         if (GPS_CORRUPTED == gps_fault_mode_.load())
@@ -495,8 +496,10 @@ namespace mrs_uav_fcu_api
             return;
         }
 
-        /*Publish delayed data stamped with current time - replicates FCU stamping GPS data on arrival*/
-        publishGps(gps_buffer_.front(), sim_time);
+        /*Publish delayed data stamped with its measurement time - replicates the FCU GPS driver, which stamps the data with
+        the measurement time although it arrives gps_delay_s later*/
+        const rclcpp::Time measurement_time = gps_buffer_.front()->header.stamp;
+        publishGps(gps_buffer_.front(), measurement_time);
         RCLCPP_INFO_ONCE(node_->get_logger(), "[HITLBinder]: GPS CALLBACK called");
     }
 
