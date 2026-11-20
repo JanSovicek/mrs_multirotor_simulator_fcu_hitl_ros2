@@ -1,6 +1,7 @@
 /* includes //{ */
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <deque>
 #include <rclcpp/rclcpp.hpp>
@@ -418,6 +419,15 @@ namespace mrs_uav_fcu_api
         msgGps.CRCValid = 1;
         msgGps.DataValid = 1;
         msgGps.gnssFixOk = 1;
+
+        /*UTC of the measurement epoch, like NAV-PVT on the real receiver: wall clock now minus the age of the sample in
+          ROS time (the simulator clock does not have to be a calendar time). Stays valid in the GPS_CORRUPTED fault mode,
+          a receiver usually keeps UTC after losing the position fix*/
+        const int64_t sample_age_ns = (node_->now() - measurement_time).nanoseconds();
+        const int64_t wall_now_us   = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        const int64_t utc_us        = wall_now_us - ((sample_age_ns > 0) ? (sample_age_ns / 1000) : 0);
+        msgGps.utcTime_us = (utc_us > 0) ? static_cast<uint64_t>(utc_us) : 0U;
+        msgGps.utcValid   = (utc_us > 0) ? 1 : 0;
 
         //Eigen::Vector3d vel_body = Eigen::Vector3d(msg->twist.twist.linear.x, msg->twist.twist.linear.y, msg->twist.twist.linear.z);
         //Eigen::Quaternion<double> q = Eigen::Quaternion<double>(msg->pose.pose.orientation.w, msg->pose.pose.orientation.x, msg->pose.pose.orientation.y, msg->pose.pose.orientation.z);
