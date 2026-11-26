@@ -268,7 +268,10 @@ void SerialApi::startSyncTimer()
 
 umsg_MessageToTransfer SerialApi::waitForPacket()
 {
+    /*Semaphore counts the queued messages, the mutex protects the queue itself - Parser thread pushes while the
+      messageParser thread pops, std::queue is not thread safe*/
     q_lock_->aquire();
+    std::scoped_lock lock(outQ_mutex_);
     umsg_MessageToTransfer msg = outQ_.front();
     outQ_.pop();
     return msg;
@@ -301,12 +304,16 @@ void SerialApi::TxThreadLoop()
         //}
         //else
         //{
+        {
+            /*Hold the lock only while moving the queued data - write() below may block until the FCU accepts the data,
+              sendPacket() callers (sensor callbacks) must not wait for the USB transfer*/
             std::unique_lock lock(tx_serial_mutex_);
             if (tx_queue_.empty()) continue;
 
             // Move all queued data to a local buffer
             bulk_buffer.assign(tx_queue_.begin(), tx_queue_.end());
             tx_queue_.clear();
+        }
         //}
 
         // Send as ONE massive USB transaction.
@@ -314,7 +321,10 @@ void SerialApi::TxThreadLoop()
         // No "Short Packet" disable until the very end.
         uint8_t* raw_ptr = bulk_buffer.data();
         size_t length = bulk_buffer.size();
-        ser_.sendCharArray(raw_ptr, length);
+        if (!ser_.sendCharArray(raw_ptr, static_cast<int>(length)))
+        {
+            RCLCPP_ERROR_THROTTLE(node_->get_logger(), steady_clock_, 1000, "[SerialApi] TX: write to serial port failed, %zu bytes not (fully) sent", length);
+        }
 
         bytes_sent_ += length;
         //if(bytes_sent_%100 == 0)
@@ -615,16 +625,25 @@ void SerialApi::pushMsgToInternalQueue()
     }
     else
     {
-        /*Push message into queue*/
-        int num_msgs = q_lock_->getVal();
-        if (num_msgs < max_packets_in_q)
+        /*Push message into queue - size check and push under the queue mutex, semaphore released after the message is
+          in the queue so the consumer never pops an empty queue*/
+        bool pushed = false;
         {
-            outQ_.push(recvdMsg_);
+            std::scoped_lock lock(outQ_mutex_);
+            if (outQ_.size() < static_cast<size_t>(max_packets_in_q))
+            {
+                outQ_.push(recvdMsg_);
+                pushed = true;
+            }
+        }
+
+        if (pushed)
+        {
             q_lock_->release();
         }
         else
         {
-            RCLCPP_ERROR(node_->get_logger(),"[SerialApi] queue is full");
+            RCLCPP_ERROR_THROTTLE(node_->get_logger(), steady_clock_, 1000, "[SerialApi] queue is full");
         }
     }
 }
@@ -638,13 +657,11 @@ void SerialApi::Parser()
         {
             std::unique_lock<std::mutex> lock(cv_mutex_);
 
-            /*Check if data arrived while we were grabbing the lock*/
-            /*Since we hold the lock now, the Reader cannot be in the middle of a notification*/
-            if (ringBufferFull() <= UMSG_HEADER_SIZE) // Or just > 0
-            {  
-                /*Wait until serial reader notifies OR timeout (safety)*/
-                cv_.wait(lock); 
-                continue; /*Wake up and check number of bytes*/
+            /*Predicate wait - the condition is re-checked under the lock, so a notification sent between the check and
+              the wait is not lost (SerialRead takes cv_mutex_ before notifying). Timeout lets the thread see !rclcpp::ok()*/
+            if (!cv_.wait_for(lock, PARSER_WAIT_TIMEOUT, [this] { return ringBufferFull() > UMSG_HEADER_SIZE; }))
+            {
+                continue;
             }
         }
 
@@ -664,19 +681,16 @@ void SerialApi::Parser()
                     continue;
                 }
 
-                while(1)
+                bool whole_msg_available = false;
                 {
                     std::unique_lock<std::mutex> lock(cv_mutex_);
+                    whole_msg_available = cv_.wait_for(lock, PARSER_WAIT_TIMEOUT, [this, len] { return ringBufferFull() >= len; });
+                }
 
-                    if (ringBufferFull()>= len) 
-                    {
-                        break; // We have enough data to process the message
-                    }
-                    else
-                    {
-                        cv_.wait(lock);
-                        continue;
-                    }
+                if (!whole_msg_available)
+                {
+                    /*Nothing consumed yet - the header stays at the tail and is parsed again on the next pass*/
+                    continue;
                 }
 
                 pRingBuf = ringBufferPeekPointer(len-1); //CRC position
@@ -735,10 +749,12 @@ void SerialApi::SerialRead()
             //    RCLCPP_INFO(node_->get_logger(), "[SerialApi] SerialRead: bytes_received_: %u", bytes_received_);
             //} 
 
-            /*Notify the parser*/
+            /*Notify the parser - take the mutex first (empty critical section): the Parser is then either before its
+              predicate check (sees the new head) or already waiting (gets the notification), no lost wake-up*/
             {
-                cv_.notify_one();
-            }    
+                std::lock_guard<std::mutex> lock(cv_mutex_);
+            }
+            cv_.notify_one();
         }
         else
         {

@@ -255,18 +255,33 @@ bool SerialPort::sendChar(const char c) {
 
 bool SerialPort::sendCharArray(uint8_t* buffer, int len) {
 
-  try {
-    bool ret_val = write(serial_port_fd_, buffer, len);
-    if (!virtual_) {
-      tcflush(serial_port_fd_, TCOFLUSH);
-    }
-    return ret_val;
-  }
-  catch (int e) {
-
-    printf("Error while writing to serial line!\n");
+  /*No tcflush(TCOFLUSH) after the write: it discards output that is queued but not yet transmitted - the cdc-acm driver
+    cancels its in-flight write URBs (acm_tty_flush_buffer), which cut umsg frames in half whenever the FCU was slow to
+    accept data. The FCU parser then resynchronised on the 8-bit CRC and occasionally accepted a spliced frame (garbage
+    IMU timestamp/values). write() may also return fewer bytes than requested - loop until the whole buffer is handed over*/
+  if ((nullptr == buffer) || (len <= 0)) {
     return false;
   }
+
+  size_t total_sent = 0;
+  const size_t total_len = static_cast<size_t>(len);
+
+  while (total_sent < total_len) {
+
+    const ssize_t n = write(serial_port_fd_, buffer + total_sent, total_len - total_sent);
+
+    if (n > 0) {
+      total_sent += static_cast<size_t>(n);
+    } else if ((n < 0) && ((EINTR == errno) || (EAGAIN == errno))) {
+      /*Interrupted by a signal / output buffer momentarily full - retry the remaining bytes*/
+      continue;
+    } else {
+      printf("Error while writing to serial line (errno %d), %zu of %zu bytes sent!\n", errno, total_sent, total_len);
+      return false;
+    }
+  }
+
+  return true;
 }
 
 //}

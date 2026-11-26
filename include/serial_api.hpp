@@ -47,6 +47,7 @@ private:
 
     std::unique_ptr<CountingSemaphore> q_lock_;
     std::queue<umsg_MessageToTransfer> outQ_;
+    std::mutex outQ_mutex_; /*Protects outQ_ - pushed by the Parser thread, popped by the messageParser thread*/
 
     /*Ring buffer for storing received data*/
     static constexpr uint32_t RX_BUFFER_SIZE = 5*1024; /*10KB*/
@@ -64,8 +65,9 @@ private:
     std::atomic<uint32_t> rx_tail_{0}; /*Written by Parser, Read by Reader*/
 
     /*Condition variable to signal data copied into ring buffer*/
-    std::condition_variable cv_; 
+    std::condition_variable cv_;
     std::mutex cv_mutex_;
+    static constexpr std::chrono::milliseconds PARSER_WAIT_TIMEOUT{100}; /*Parser wake-up period without data (shutdown check)*/
 
     uint32_t bytes_sent_ = 0;
     uint32_t bytes_received_ = 0;

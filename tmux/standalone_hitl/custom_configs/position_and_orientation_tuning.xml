@@ -1,35 +1,35 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <root>
- <tabbed_widget name="Main Window" parent="main_window">
+ <tabbed_widget parent="main_window" name="Main Window">
   <Tab containers="1" tab_name="tab2">
    <Container>
-    <DockSplitter count="3" orientation="-" sizes="0.333067;0.333866;0.333067">
+    <DockSplitter orientation="-" count="3" sizes="0.333805;0.33239;0.333805">
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.460931" right="55.459925" bottom="-0.020371" top="0.022770"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.780753" top="0.023053" bottom="-0.015904" left="0.001018"/>
        <limitY/>
-       <curve name="/uav1/hw_api/FCU/world_position_estimate/position[0]" color="#1f77b4"/>
-       <curve name="/multirotor_simulator/uav1/odom/pose/pose/position/x" color="#17becf"/>
-       <curve name="/uav1/hw_api/FCU/target_reference_position/position[0]" color="#ff7f0e"/>
+       <curve color="#1f77b4" name="/uav1/hw_api/FCU/world_position_estimate/position[0]"/>
+       <curve color="#17becf" name="/multirotor_simulator/uav1/odom/pose/pose/position/x"/>
+       <curve color="#ff7f0e" name="/uav1/hw_api/FCU/target_reference_position/position[0]"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.460931" right="55.459925" bottom="-0.079201" top="0.001932"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.780753" top="0.021386" bottom="-0.083580" left="0.001018"/>
        <limitY/>
-       <curve name="/uav1/hw_api/FCU/world_position_estimate/position[1]" color="#d62728"/>
-       <curve name="/multirotor_simulator/uav1/odom/pose/pose/position/y" color="#bcbd22"/>
-       <curve name="/uav1/hw_api/FCU/target_reference_position/position[1]" color="#f14cc1"/>
+       <curve color="#d62728" name="/uav1/hw_api/FCU/world_position_estimate/position[1]"/>
+       <curve color="#bcbd22" name="/multirotor_simulator/uav1/odom/pose/pose/position/y"/>
+       <curve color="#f14cc1" name="/uav1/hw_api/FCU/target_reference_position/position[1]"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.460931" right="55.459925" bottom="-0.084370" top="0.086824"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.780753" top="0.269133" bottom="-0.220972" left="0.001018"/>
        <limitY/>
-       <curve name="/uav1/hw_api/FCU/world_position_estimate/position[2]" color="#1ac938"/>
-       <curve name="/multirotor_simulator/uav1/odom/pose/pose/position/z" color="#1f77b4"/>
-       <curve name="/uav1/hw_api/FCU/target_reference_altitude/position" color="#d62728"/>
-       <curve name="/uav1/hw_api/FCU/target_reference_position/position[2]" color="#9467bd"/>
+       <curve color="#1ac938" name="/uav1/hw_api/FCU/world_position_estimate/position[2]"/>
+       <curve color="#1f77b4" name="/multirotor_simulator/uav1/odom/pose/pose/position/z"/>
+       <curve color="#d62728" name="/uav1/hw_api/FCU/target_reference_altitude/position"/>
+       <curve color="#9467bd" name="/uav1/hw_api/FCU/target_reference_position/position[2]"/>
       </plot>
      </DockArea>
     </DockSplitter>
@@ -37,33 +37,33 @@
   </Tab>
   <Tab containers="1" tab_name="tab1">
    <Container>
-    <DockSplitter count="3" orientation="-" sizes="0.333067;0.333866;0.333067">
+    <DockSplitter orientation="-" count="3" sizes="0.333805;0.33239;0.333805">
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.460931" right="55.459917" bottom="-0.037642" top="0.043630"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.780770" top="0.040561" bottom="-0.038941" left="0.001018"/>
        <limitY/>
-       <curve name="/uav1/hw_api/FCU/world_position_estimate/velocity[0]" color="#ff7f0e"/>
-       <curve name="/uav1/hw_api/FCU/target_reference_position/velocity[0]" color="#17becf"/>
-       <curve name="/multirotor_simulator/uav1/world_velocity/vector/x" color="#1f77b4"/>
+       <curve color="#ff7f0e" name="/uav1/hw_api/FCU/world_position_estimate/velocity[0]"/>
+       <curve color="#17becf" name="/uav1/hw_api/FCU/target_reference_position/velocity[0]"/>
+       <curve color="#1f77b4" name="/multirotor_simulator/uav1/world_velocity/vector/x"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.460931" right="55.459917" bottom="-0.128319" top="0.003130"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.780770" top="0.039496" bottom="-0.129874" left="0.001018"/>
        <limitY/>
-       <curve name="/uav1/hw_api/FCU/world_position_estimate/velocity[1]" color="#f14cc1"/>
-       <curve name="/uav1/hw_api/FCU/target_reference_position/velocity[1]" color="#bcbd22"/>
-       <curve name="/multirotor_simulator/uav1/world_velocity/vector/y" color="#d62728"/>
+       <curve color="#f14cc1" name="/uav1/hw_api/FCU/world_position_estimate/velocity[1]"/>
+       <curve color="#bcbd22" name="/uav1/hw_api/FCU/target_reference_position/velocity[1]"/>
+       <curve color="#d62728" name="/multirotor_simulator/uav1/world_velocity/vector/y"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.460931" right="55.459917" bottom="-0.064396" top="0.052564"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.780770" top="0.071402" bottom="-0.061567" left="0.001018"/>
        <limitY/>
-       <curve name="/uav1/hw_api/FCU/world_position_estimate/velocity[2]" color="#9467bd"/>
-       <curve name="/uav1/hw_api/FCU/target_reference_altitude/velocity" color="#1ac938"/>
-       <curve name="/uav1/hw_api/FCU/target_reference_position/velocity[2]" color="#1f77b4"/>
-       <curve name="/multirotor_simulator/uav1/world_velocity/vector/z" color="#1ac938"/>
+       <curve color="#9467bd" name="/uav1/hw_api/FCU/world_position_estimate/velocity[2]"/>
+       <curve color="#1ac938" name="/uav1/hw_api/FCU/target_reference_altitude/velocity"/>
+       <curve color="#1f77b4" name="/uav1/hw_api/FCU/target_reference_position/velocity[2]"/>
+       <curve color="#1ac938" name="/multirotor_simulator/uav1/world_velocity/vector/z"/>
       </plot>
      </DockArea>
     </DockSplitter>
@@ -71,19 +71,20 @@
   </Tab>
   <Tab containers="1" tab_name="tab3">
    <Container>
-    <DockSplitter count="2" orientation="-" sizes="0.500399;0.499601">
+    <DockSplitter orientation="-" count="2" sizes="0.500399;0.499601">
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="0.000000" right="55.446852" bottom="1.150000" top="1.350000"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.771447" top="1.350000" bottom="1.150000" left="0.009334"/>
        <limitY/>
-       <curve name="/uav1/hw_api/FCU/Thrust_param_estimate/k" color="#d62728"/>
+       <curve color="#d62728" name="/uav1/hw_api/FCU/Thrust_param_estimate/k"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="0.000000" right="55.446852" bottom="-0.100000" top="0.100000"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.771447" top="0.010250" bottom="-0.000250" left="0.009334"/>
        <limitY/>
-       <curve name="/uav1/hw_api/FCU/Attitude_rate_command/thrust" color="#1ac938"/>
+       <curve color="#1f77b4" name="/uav1/hw_api/FCU/Attitude_rate_command/thrust_output"/>
+       <curve color="#d62728" name="/uav1/hw_api/FCU/Attitude_rate_command/thrust_cmd"/>
       </plot>
      </DockArea>
     </DockSplitter>
@@ -91,35 +92,35 @@
   </Tab>
   <Tab containers="1" tab_name="tab4">
    <Container>
-    <DockSplitter count="3" orientation="-" sizes="0.333067;0.333866;0.333067">
+    <DockSplitter orientation="-" count="3" sizes="0.333805;0.33239;0.333805">
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.461972" right="55.460070" bottom="-0.001337" top="0.000850"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.781276" top="0.001745" bottom="-0.000796" left="0.000000"/>
        <limitY/>
-       <curve name="/multirotor_simulator/uav1/odom/pose/pose/orientation/x" color="#ff7f0e"/>
-       <curve name="/uav1/hw_api/orientation/quaternion/x" color="#1f77b4"/>
+       <curve color="#ff7f0e" name="/multirotor_simulator/uav1/odom/pose/pose/orientation/x"/>
+       <curve color="#1f77b4" name="/uav1/hw_api/orientation/quaternion/x"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.461972" right="55.460070" bottom="-0.002573" top="0.002030"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.781276" top="0.003366" bottom="-0.001391" left="0.000000"/>
        <limitY/>
-       <curve name="/multirotor_simulator/uav1/odom/pose/pose/orientation/y" color="#f14cc1"/>
-       <curve name="/uav1/hw_api/orientation/quaternion/y" color="#d62728"/>
+       <curve color="#f14cc1" name="/multirotor_simulator/uav1/odom/pose/pose/orientation/y"/>
+       <curve color="#d62728" name="/uav1/hw_api/orientation/quaternion/y"/>
       </plot>
      </DockArea>
      <DockArea name="...">
-      <plot mode="TimeSeries" flip_x="false" line_width="1.0" flip_y="false">
-       <range left="5.461972" right="55.460070" bottom="-0.000746" top="0.002626"/>
+      <plot mode="TimeSeries" flip_y="false" flip_x="false" line_width="1.0">
+       <range right="45.781276" top="0.000326" bottom="-0.001580" left="0.000000"/>
        <limitY/>
-       <curve name="/multirotor_simulator/uav1/odom/pose/pose/orientation/z" color="#9467bd"/>
-       <curve name="/uav1/hw_api/orientation/quaternion/z" color="#1ac938"/>
+       <curve color="#9467bd" name="/multirotor_simulator/uav1/odom/pose/pose/orientation/z"/>
+       <curve color="#1ac938" name="/uav1/hw_api/orientation/quaternion/z"/>
       </plot>
      </DockArea>
     </DockSplitter>
    </Container>
   </Tab>
-  <currentTabIndex index="1"/>
+  <currentTabIndex index="2"/>
  </tabbed_widget>
  <use_relative_time_offset enabled="1"/>
  <!-- - - - - - - - - - - - - - - -->
@@ -144,7 +145,7 @@
    <max_array_size value="100"/>
    <boolean_strings_to_number value="true"/>
    <remove_suffix_from_strings value="true"/>
-   <selected_topics value="/multirotor_simulator/uav1/imu;/multirotor_simulator/uav1/imu_noise;/multirotor_simulator/uav1/magnetometer;/multirotor_simulator/uav1/magnetometer_noise;/multirotor_simulator/uav1/odom;/multirotor_simulator/uav1/odom_noise;/uav1/hw_api/FCU/Attitude_control_response;/uav1/hw_api/FCU/Attitude_rate_command;/uav1/hw_api/FCU/Thrust_param_estimate;/uav1/hw_api/FCU/cpu_load;/uav1/hw_api/FCU/target_reference_altitude;/uav1/hw_api/FCU/target_reference_position;/uav1/hw_api/FCU/world_position_estimate;/uav1/hw_api/altitude;/uav1/hw_api/orientation;/uav1/hw_api/position;/multirotor_simulator/uav1/world_velocity"/>
+   <selected_topics value="/multirotor_simulator/uav1/imu;/multirotor_simulator/uav1/imu_noise;/multirotor_simulator/uav1/magnetometer;/multirotor_simulator/uav1/magnetometer_noise;/multirotor_simulator/uav1/odom;/multirotor_simulator/uav1/odom_noise;/multirotor_simulator/uav1/world_velocity;/uav1/hw_api/FCU/Attitude_control_response;/uav1/hw_api/FCU/Attitude_rate_command;/uav1/hw_api/FCU/Thrust_param_estimate;/uav1/hw_api/FCU/cpu_load;/uav1/hw_api/FCU/target_reference_altitude;/uav1/hw_api/FCU/target_reference_position;/uav1/hw_api/FCU/world_position_estimate;/uav1/hw_api/altitude;/uav1/hw_api/orientation;/uav1/hw_api/position"/>
   </plugin>
   <plugin ID="UDP Server"/>
   <plugin ID="WebSocket Server"/>
