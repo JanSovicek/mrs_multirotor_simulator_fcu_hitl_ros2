@@ -3,6 +3,9 @@
 #include "serial_port.hpp"
 #include <umsg_classes.h>
 #include <umsg_state.h>
+#include <umsg_debug.h>
+#include <array>
+#include <atomic>
 #include <thread>
 #include <condition_variable>
 #include <mutex>
@@ -81,6 +84,40 @@ private:
 
     rclcpp::Clock steady_clock_{RCL_STEADY_TIME};
 
+    /*PC->FCU link accounting (LinkStats). The PC records its TX stream position right after each HeartbeatRequest, the FCU
+      reports how many bytes its parser consumed up to and including that request - the difference is the exact number of
+      bytes that never made it through (no in-flight uncertainty, USB CDC is ordered)*/
+    uint64_t tx_stream_bytes_ = 0;               /*bytes queued for TX since start - protected by tx_serial_mutex_*/
+    std::atomic<uint64_t> tx_failed_bytes_{0};   /*bytes of bulk writes that failed (upper bound - partial writes unknown)*/
+
+    struct LinkTxMark
+    {
+        uint32_t seq_num  = 0;
+        uint64_t tx_bytes = 0;     /*TX stream position at the end of the HeartbeatRequest frame*/
+        bool     valid    = false;
+    };
+    static constexpr size_t LINK_TX_MARKS = 32;  /*heartbeat 1 Hz - 32 s of outstanding requests*/
+    std::array<LinkTxMark, LINK_TX_MARKS> link_tx_marks_{};
+
+    /*Counters at the baseline (first LinkStats or FCU reboot) and at the previous report - Parser thread only*/
+    struct LinkCounters
+    {
+        uint64_t pc_tx_bytes       = 0;
+        uint64_t pc_tx_failed      = 0;
+        uint64_t fcu_rx_bytes      = 0;
+        uint64_t fcu_overflow      = 0;
+        uint64_t fcu_garbage       = 0;
+        uint64_t fcu_rejected_ts   = 0;
+        uint64_t fcu_rejected_val  = 0;
+    };
+    std::mutex   link_mutex_;                    /*protects link_tx_marks_*/
+    bool         link_baseline_valid_ = false;
+    LinkCounters link_baseline_{};
+    LinkCounters link_last_{};
+    int64_t      link_last_missing_ = 0;
+
+    void handleLinkStats(const umsg_debug_LinkStats_t& stats);
+
     static constexpr uint32_t SYNC_WINDOW_SIZE = 10;
     std::deque<double> rtt_buffer_;
     double filtered_delay_ms_ = -1.0;
@@ -125,7 +162,8 @@ public:
     void startSerialApiThreads();
     void startSyncTimer();
     umsg_MessageToTransfer waitForPacket();
-    void sendPacket(umsg_MessageToTransfer &msg);
+    /*Returns the TX stream position (bytes queued since start) at the end of this message*/
+    uint64_t sendPacket(umsg_MessageToTransfer &msg);
     uint64_t RosToFcu(const rclcpp::Time &rosTime);
     rclcpp::Time FcuToRos(const uint64_t &FcuTime);
 };

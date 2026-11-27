@@ -3,6 +3,7 @@
 #include <cstring>
 #include <umsg.h>
 #include "umsg_state.h"
+#include "umsg_debug.h"
 #include <mrs_lib/mutex.h>
 #include <chrono>
 #include <termios.h>
@@ -208,7 +209,13 @@ void SerialApi::timerSync()
 
     rclcpp::Time curr_time_simulation = clock_->now();
     rclcpp::Time curr_time_steady = steady_clock_.now();
-    sendPacket(msgTransfer);
+    const uint64_t tx_mark = sendPacket(msgTransfer);
+
+    /*Remember the stream position of this request - compared with LinkStats.rx_bytes of the same seq_num*/
+    {
+        std::scoped_lock lock(link_mutex_);
+        link_tx_marks_[msgHbtRequest.seq_num % LINK_TX_MARKS] = LinkTxMark{msgHbtRequest.seq_num, tx_mark, true};
+    }
     mrs_lib::set_mutexed(mutex_sync_time, std::tuple(curr_time_simulation, curr_time_steady, sequential), std::forward_as_tuple(sync_time_simulation_ROS_send, sync_time_steady_clock_ROS_send, sequence_number));
 
     RCLCPP_INFO(node_->get_logger(), "[SerialApi]: Sync time message sent, sequence number %u", msgHbtRequest.seq_num);
@@ -277,10 +284,89 @@ umsg_MessageToTransfer SerialApi::waitForPacket()
     return msg;
 }
 
-void SerialApi::sendPacket(umsg_MessageToTransfer &msg)
+uint64_t SerialApi::sendPacket(umsg_MessageToTransfer &msg)
 {
     std::unique_lock lock(tx_serial_mutex_);
     tx_queue_.insert(tx_queue_.end(), msg.raw, msg.raw + msg.s.len);
+    /*Counted at enqueue under the queue mutex - the TX thread writes the queue in this order, so this is the byte stream
+      position the FCU sees*/
+    tx_stream_bytes_ += msg.s.len;
+    return tx_stream_bytes_;
+}
+
+void SerialApi::handleLinkStats(const umsg_debug_LinkStats_t& stats)
+{
+    LinkTxMark mark;
+    {
+        std::scoped_lock lock(link_mutex_);
+        mark = link_tx_marks_[stats.seq_num % LINK_TX_MARKS];
+    }
+
+    if (!mark.valid || (mark.seq_num != stats.seq_num))
+    {
+        RCLCPP_WARN(node_->get_logger(), "[LINK] LinkStats seq %u has no matching HeartbeatRequest (too old or corrupted)", stats.seq_num);
+        return;
+    }
+
+    LinkCounters now;
+    now.pc_tx_bytes      = mark.tx_bytes;
+    now.pc_tx_failed     = tx_failed_bytes_.load();
+    now.fcu_rx_bytes     = stats.rx_bytes;
+    now.fcu_overflow     = stats.rx_overflow_bytes;
+    now.fcu_garbage      = stats.garbage_bytes;
+    now.fcu_rejected_ts  = stats.rejected_timestamp_cnt;
+    now.fcu_rejected_val = stats.rejected_value_cnt;
+
+    /*Baseline on the first report and after an FCU reboot (its counters start from 0 at boot, the PC counts since start)*/
+    const bool fcu_restarted = link_baseline_valid_ && (now.fcu_rx_bytes < link_last_.fcu_rx_bytes);
+    if (!link_baseline_valid_ || fcu_restarted)
+    {
+        if (fcu_restarted)
+        {
+            RCLCPP_WARN(node_->get_logger(), "[LINK] FCU counters went backwards (FCU reboot?) - new baseline at seq %u", stats.seq_num);
+        }
+        link_baseline_       = now;
+        link_last_           = now;
+        link_last_missing_   = 0;
+        link_baseline_valid_ = true;
+        RCLCPP_INFO(node_->get_logger(), "[LINK] Baseline at seq %u (PC sent %lu B, FCU consumed %lu B)", stats.seq_num, now.pc_tx_bytes, now.fcu_rx_bytes);
+        return;
+    }
+
+    /*Since baseline: missing = bytes the PC queued up to this request that the FCU parser never consumed
+                      = dropped by FCU ring overflow + lost on the way (PC write failure, URB cancel, USB)*/
+    const uint64_t sent    = now.pc_tx_bytes - link_baseline_.pc_tx_bytes;
+    const uint64_t rx      = now.fcu_rx_bytes - link_baseline_.fcu_rx_bytes;
+    const int64_t  missing = static_cast<int64_t>(sent) - static_cast<int64_t>(rx);
+    const uint64_t overflow   = now.fcu_overflow     - link_baseline_.fcu_overflow;
+    const uint64_t garbage    = now.fcu_garbage      - link_baseline_.fcu_garbage;
+    const uint64_t rej_ts     = now.fcu_rejected_ts  - link_baseline_.fcu_rejected_ts;
+    const uint64_t rej_val    = now.fcu_rejected_val - link_baseline_.fcu_rejected_val;
+    const uint64_t tx_failed  = now.pc_tx_failed     - link_baseline_.pc_tx_failed;
+
+    const bool changed = (missing != link_last_missing_) ||
+                         (now.fcu_overflow     != link_last_.fcu_overflow) ||
+                         (now.fcu_garbage      != link_last_.fcu_garbage) ||
+                         (now.fcu_rejected_ts  != link_last_.fcu_rejected_ts) ||
+                         (now.fcu_rejected_val != link_last_.fcu_rejected_val) ||
+                         (now.pc_tx_failed     != link_last_.pc_tx_failed);
+
+    if (changed)
+    {
+        /*overflow may include bytes sent after the request (ISR runs ahead of the parser), so missing - overflow is a lower
+          bound of the bytes lost on the way*/
+        RCLCPP_WARN(node_->get_logger(),
+                    "[LINK] seq %u: missing %ld B (+%ld) | FCU overflow %lu B, garbage %lu B, rejected ts %lu / val %lu | PC write failed %lu B | sent %lu B",
+                    stats.seq_num, missing, missing - link_last_missing_, overflow, garbage, rej_ts, rej_val, tx_failed, sent);
+    }
+    else
+    {
+        RCLCPP_INFO_THROTTLE(node_->get_logger(), steady_clock_, 10000,
+                             "[LINK] seq %u: OK - sent %lu B, missing %ld B, garbage %lu B, overflow %lu B", stats.seq_num, sent, missing, garbage, overflow);
+    }
+
+    link_last_         = now;
+    link_last_missing_ = missing;
 }
 
 void SerialApi::TxThreadLoop() 
@@ -324,6 +410,7 @@ void SerialApi::TxThreadLoop()
         if (!ser_.sendCharArray(raw_ptr, static_cast<int>(length)))
         {
             RCLCPP_ERROR_THROTTLE(node_->get_logger(), steady_clock_, 1000, "[SerialApi] TX: write to serial port failed, %zu bytes not (fully) sent", length);
+            tx_failed_bytes_ += length;
         }
 
         bytes_sent_ += length;
@@ -622,6 +709,19 @@ void SerialApi::pushMsgToInternalQueue()
     else if (recvdMsg_.s.msg_class == UMSG_STATE && recvdMsg_.s.msg_type == STATE_HEARTBEAT_REQUEST)
     {
         RCLCPP_ERROR(node_->get_logger(),"[SerialApi] Echo read");
+    }
+    else if (recvdMsg_.s.msg_class == UMSG_DEBUG && recvdMsg_.s.msg_type == DEBUG_LINK_STATS)
+    {
+        /*Link accounting is handled here next to the TX byte counter - not forwarded to hw_api*/
+        umsg_debug_LinkStats_t link_stats;
+        if (umsg_debug_LinkStats_deserialize(&link_stats, recvdMsg_.s.payload, recvdMsg_.s.len - UMSG_HEADER_SIZE - UMSG_CRC_SIZE))
+        {
+            handleLinkStats(link_stats);
+        }
+        else
+        {
+            RCLCPP_ERROR(node_->get_logger(),"[SerialApi] Deserialization of LinkStats failed");
+        }
     }
     else
     {
