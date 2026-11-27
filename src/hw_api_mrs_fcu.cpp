@@ -311,7 +311,7 @@ namespace mrs_uav_fcu_api
 
         /*Set message length and CRC*/
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
-        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+        umsg_appendCRC(out.raw, out.s.len);
 
         /*Send message*/
         ser_->sendPacket(out);
@@ -349,7 +349,7 @@ namespace mrs_uav_fcu_api
 
         /*Set message length and CRC*/
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
-        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+        umsg_appendCRC(out.raw, out.s.len);
 
         /*Send message*/
         ser_->sendPacket(out);
@@ -376,7 +376,7 @@ namespace mrs_uav_fcu_api
 
         /*Set message length and CRC*/
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
-        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+        umsg_appendCRC(out.raw, out.s.len);
 
         /*Send message*/
         ser_->sendPacket(out);
@@ -458,7 +458,7 @@ namespace mrs_uav_fcu_api
 
         /*Set message length and CRC*/
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
-        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+        umsg_appendCRC(out.raw, out.s.len);
 
         /*Send message*/
         ser_->sendPacket(out);
@@ -987,7 +987,7 @@ namespace mrs_uav_fcu_api
 
         /*Set message length and CRC*/
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
-        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+        umsg_appendCRC(out.raw, out.s.len);
 
         //ser_->sendPacket(out);
 
@@ -1031,7 +1031,7 @@ namespace mrs_uav_fcu_api
 
         /*Set message length and CRC*/
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
-        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+        umsg_appendCRC(out.raw, out.s.len);
 
         //ser_->sendPacket(out);
         //Crashes FCU
@@ -1075,7 +1075,7 @@ namespace mrs_uav_fcu_api
 
         /*Set message length and CRC*/
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
-        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+        umsg_appendCRC(out.raw, out.s.len);
 
         //ser_->sendPacket(out);
 
@@ -1109,7 +1109,7 @@ namespace mrs_uav_fcu_api
 
         /*Set message length and CRC*/
         out.s.len = payload_len + UMSG_HEADER_SIZE + UMSG_CRC_SIZE;
-        out.raw[out.s.len - UMSG_CRC_SIZE] = umsg_calcCRC(out.raw, out.s.len - UMSG_CRC_SIZE);
+        umsg_appendCRC(out.raw, out.s.len);
 
         //ser_->sendPacket(out);
 

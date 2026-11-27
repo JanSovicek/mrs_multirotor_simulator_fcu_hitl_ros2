@@ -204,7 +204,6 @@ namespace mrs_fcu_hitl_binder
 
         // | ----------------------- finish init ---------------------- |
         //Initialization of serial communication done in hw_api_mrs_fcu.cpp
-        //umsg_CRCInit();
         
         //ser_api_ = std::make_shared<SerialApi>(node_);
         //ser_api_->startSerialApiThreads();

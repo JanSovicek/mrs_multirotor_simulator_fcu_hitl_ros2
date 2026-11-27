@@ -71,7 +71,6 @@ SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int b
     }
 
     q_lock_ = std::make_unique<CountingSemaphore>(max_packets_in_q);
-    umsg_CRCInit();
 }
 
 void SerialApi::calculateDelay(umsg_state_HeartbeatResponse_t heartbeat, const rclcpp::Time& arrival_time_steady)
@@ -235,7 +234,7 @@ void SerialApi::timerSync()
     //Serialize message into payload buffer
     uint32_t payload_len = umsg_state_HeartbeatRequest_serialize(&msgHbtRequest, msgTransfer.s.payload);
     msgTransfer.s.len = UMSG_HEADER_SIZE + payload_len + UMSG_CRC_SIZE;
-    msgTransfer.raw[msgTransfer.s.len - 1] = umsg_calcCRC(msgTransfer.raw, msgTransfer.s.len - 1);
+    umsg_appendCRC(msgTransfer.raw, msgTransfer.s.len);
 
     sequential += 1;
 
@@ -685,12 +684,14 @@ uint32_t SerialApi::ringBufferPeekUint32(uint32_t offset_from_tail)
     return value;
 }
 
-uint8_t SerialApi::ringBufferCalcCRC(uint32_t total_len) 
+/*Residue check of the frame at the tail (total_len bytes including its CRC, possibly split by the ring wrap - the CRC
+  itself may straddle the wrap). True if the CRC is valid*/
+bool SerialApi::ringBufferCheckCRC(uint32_t total_len) 
 {
   // 1. Get Start Index and Pointers
   uint32_t tail = rx_tail_.load(std::memory_order_relaxed);
   
-  uint8_t crc = 0; // Initial seed
+  umsg_crc_t crc = static_cast<umsg_crc_t>(UMSG_CRC_INIT);
   
   uint32_t chunk1_len;
 
@@ -704,9 +705,8 @@ uint8_t SerialApi::ringBufferCalcCRC(uint32_t total_len)
     chunk1_len = RX_BUFFER_SIZE-tail;
   }
 
-  // Process the First Chunk
-  // We pass '0' as the initial remainder for the start of the packet
-  crc = umsg_calcCRC_split(&rx_data_ring_buffer_[tail], chunk1_len, 0);
+  // Process the First Chunk, started from UMSG_CRC_INIT
+  crc = umsg_calcCRC_split(&rx_data_ring_buffer_[tail], chunk1_len, crc);
 
   // Process the Wrap-Around Chunk (If needed)
   if (total_len > chunk1_len) 
@@ -716,7 +716,8 @@ uint8_t SerialApi::ringBufferCalcCRC(uint32_t total_len)
     crc = umsg_calcCRC_split((&rx_data_ring_buffer_[0]), chunk2_len, crc);
   }
 
-  return crc;
+  /*CRC appended MSB first -> the CRC over data + CRC is 0*/
+  return (0U == crc);
 }
 
 void SerialApi::ringBufferRemove(uint32_t bytes_to_remove)
@@ -830,7 +831,7 @@ void SerialApi::Parser()
             {
                 uint32_t len = ringBufferPeekUint32(4);
 
-                if ((len < UMSG_HEADER_SIZE + 1) || (len > sizeof(umsg_MessageToTransfer)))
+                if ((len < UMSG_HEADER_SIZE + UMSG_CRC_SIZE) || (len > UMSG_HEADER_SIZE + UMSG_MAX_PAYLOAD_SIZE + UMSG_CRC_SIZE))
                 {
                     /*Invalid length - remove data and start again*/
                     ringBufferRemove(2);
@@ -849,8 +850,7 @@ void SerialApi::Parser()
                     continue;
                 }
 
-                pRingBuf = ringBufferPeekPointer(len-1); //CRC position
-                if (ringBufferCalcCRC(len-1) == *pRingBuf)
+                if (ringBufferCheckCRC(len))
                 {
                     /*Valid CRC - copy message and remove it from ring buffer*/
                     ringBufferPop(len);

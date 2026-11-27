@@ -167,7 +167,7 @@ private:
     void        ringBufferPush(uint8_t* chunk_buffer, const uint32_t bytes_from_os, const rclcpp::Time& arrival_timestamp_steady);
     uint8_t*    ringBufferPeekPointer(uint32_t offset_from_tail);
     uint32_t    ringBufferPeekUint32(uint32_t offset_from_tail);
-    uint8_t     ringBufferCalcCRC(uint32_t total_len);
+    bool        ringBufferCheckCRC(uint32_t total_len);
     void        ringBufferRemove(uint32_t bytes_to_remove);
 
     void pushMsgToInternalQueue();
