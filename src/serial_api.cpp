@@ -6,6 +6,8 @@
 #include "umsg_debug.h"
 #include <mrs_lib/mutex.h>
 #include <chrono>
+#include <algorithm>
+#include <cstdlib>
 #include <termios.h>
 
 CountingSemaphore::CountingSemaphore(int max_count)
@@ -54,12 +56,17 @@ SerialApi::SerialApi(const rclcpp::Node::SharedPtr& node, std::string dev, int b
 {
     this->initialize(node);
 
+    dev_      = dev;
+    baudrate_ = baudrate;
+
     if (!ser_.connect(dev, baudrate, false))
     {
-        RCLCPP_ERROR(node_->get_logger(),"could not open serial port %s", dev.c_str());
+        /*Not fatal - SerialRead keeps retrying, hw_api may be started before the FCU is plugged in*/
+        RCLCPP_ERROR(node_->get_logger(),"could not open serial port %s (errno %d) - retrying", dev.c_str(), ser_.last_errno_);
     }
     else 
     {
+         port_connected_.store(true);
          RCLCPP_INFO(node_->get_logger(),"Connected to %s", dev.c_str());
     }
 
@@ -94,8 +101,11 @@ void SerialApi::calculateDelay(umsg_state_HeartbeatResponse_t heartbeat, const r
 
     // 5. Gatekeeper: Is this a "Lucky Packet"?
     // We only trust the time calculation if the RTT is close to the physical minimum.
-    // (You can maintain a simple min_rtt variable that slowly decays upwards to handle route changes)
-    if (current_rtt_ms < historical_min_rtt_) historical_min_rtt_ = current_rtt_ms;
+    // The minimum is taken over a sliding window of the last SYNC_WINDOW_SIZE heartbeats (this one included), so it
+    // follows the link upwards too - a single exceptionally fast heartbeat cannot block all later updates
+    rtt_buffer_.push_back(current_rtt_ms);
+    while (rtt_buffer_.size() > SYNC_WINDOW_SIZE) rtt_buffer_.pop_front();
+    historical_min_rtt_ = *std::min_element(rtt_buffer_.begin(), rtt_buffer_.end());
 
     // Allow a small margin (e.g., 30% or 1ms) above the best-ever RTT
     double acceptance_threshold = historical_min_rtt_ * 1.3; 
@@ -114,7 +124,29 @@ void SerialApi::calculateDelay(umsg_state_HeartbeatResponse_t heartbeat, const r
         if (!offset_initialized_.load()) {
             smoothed_offset_ns_.store(raw_offset_ns);
             offset_initialized_.store(true);
+            offset_jump_pending_ = false;
+            RCLCPP_INFO(node_->get_logger(), "[SYNC] Seq: %u, Offset initialized: %ld ns", heartbeat.seq_num, raw_offset_ns);
+        } else if (std::llabs(raw_offset_ns - smoothed_offset_ns_.load()) > OFFSET_JUMP_REINIT_NS) {
+            /*FCU or sim clock restarted/jumped without a port disconnect - averaging would take tens of seconds, during
+              which the FCU rejects all sensor data as implausibly stamped. A single heartbeat is not trusted (corrupted
+              timestamp_arrived), the jump must be confirmed by the next lucky heartbeat*/
+            if (offset_jump_pending_ && (std::llabs(raw_offset_ns - offset_jump_candidate_ns_) <= OFFSET_JUMP_CONFIRM_NS)) {
+                RCLCPP_WARN(node_->get_logger(), "[SYNC] Seq: %u, Offset jump %ld ns confirmed (clock restart?) - re-initialized",
+                            heartbeat.seq_num, raw_offset_ns - smoothed_offset_ns_.load());
+                smoothed_offset_ns_.store(raw_offset_ns);
+                offset_jump_pending_ = false;
+            } else {
+                RCLCPP_WARN(node_->get_logger(), "[SYNC] Seq: %u, Offset jump %ld ns - candidate, waiting for confirmation",
+                            heartbeat.seq_num, raw_offset_ns - smoothed_offset_ns_.load());
+                offset_jump_candidate_ns_ = raw_offset_ns;
+                offset_jump_pending_      = true;
+            }
         } else {
+            /*Agrees with the current offset - a pending jump candidate was a lone outlier*/
+            if (offset_jump_pending_) {
+                RCLCPP_WARN(node_->get_logger(), "[SYNC] Seq: %u, Offset jump candidate discarded (outlier)", heartbeat.seq_num);
+                offset_jump_pending_ = false;
+            }
             // Apply EWMA to the OFFSET
             int64_t new_offset = static_cast<int64_t>((alpha * raw_offset_ns) + ((1.0 - alpha) * smoothed_offset_ns_.load()));
             smoothed_offset_ns_.store(new_offset);
@@ -407,7 +439,19 @@ void SerialApi::TxThreadLoop()
         // No "Short Packet" disable until the very end.
         uint8_t* raw_ptr = bulk_buffer.data();
         size_t length = bulk_buffer.size();
-        if (!ser_.sendCharArray(raw_ptr, static_cast<int>(length)))
+
+        bool sent = false;
+        {
+            std::scoped_lock port_lock(port_mutex_);
+            if (!port_connected_.load())
+            {
+                /*FCU disconnected - drop the data (stale sensor samples are useless after the reconnect)*/
+                continue;
+            }
+            sent = ser_.sendCharArray(raw_ptr, static_cast<int>(length));
+        }
+
+        if (!sent)
         {
             RCLCPP_ERROR_THROTTLE(node_->get_logger(), steady_clock_, 1000, "[SerialApi] TX: write to serial port failed, %zu bytes not (fully) sent", length);
             tx_failed_bytes_ += length;
@@ -754,15 +798,27 @@ void SerialApi::Parser()
         
     while (rclcpp::ok())
     {
+        /*Disconnect handling requested by SerialRead - applied here, this thread owns rx_tail_ and the sync/LinkStats state*/
+        if (link_reset_request_.load())
+        {
+            applyLinkReset();
+            continue;
+        }
+
         {
             std::unique_lock<std::mutex> lock(cv_mutex_);
 
             /*Predicate wait - the condition is re-checked under the lock, so a notification sent between the check and
               the wait is not lost (SerialRead takes cv_mutex_ before notifying). Timeout lets the thread see !rclcpp::ok()*/
-            if (!cv_.wait_for(lock, PARSER_WAIT_TIMEOUT, [this] { return ringBufferFull() > UMSG_HEADER_SIZE; }))
+            if (!cv_.wait_for(lock, PARSER_WAIT_TIMEOUT, [this] { return (ringBufferFull() > UMSG_HEADER_SIZE) || link_reset_request_.load(); }))
             {
                 continue;
             }
+        }
+
+        if (link_reset_request_.load())
+        {
+            continue;
         }
 
         uint8_t* pRingBuf = ringBufferPeekPointer(0);
@@ -784,10 +840,10 @@ void SerialApi::Parser()
                 bool whole_msg_available = false;
                 {
                     std::unique_lock<std::mutex> lock(cv_mutex_);
-                    whole_msg_available = cv_.wait_for(lock, PARSER_WAIT_TIMEOUT, [this, len] { return ringBufferFull() >= len; });
+                    whole_msg_available = cv_.wait_for(lock, PARSER_WAIT_TIMEOUT, [this, len] { return (ringBufferFull() >= len) || link_reset_request_.load(); });
                 }
 
-                if (!whole_msg_available)
+                if (!whole_msg_available || link_reset_request_.load())
                 {
                     /*Nothing consumed yet - the header stays at the tail and is parsed again on the next pass*/
                     continue;
@@ -836,9 +892,27 @@ void SerialApi::SerialRead()
 
     while(rclcpp::ok())
     {
+        /*Port closed (FCU reset / not plugged in yet) - reopen periodically*/
+        if (!port_connected_.load())
+        {
+            if (!tryReconnect())
+            {
+                std::this_thread::sleep_for(RECONNECT_PERIOD);
+            }
+            continue;
+        }
+
         /*Blocking read*/
-        uint32_t bytes_from_os = ser_.readSerial(chunk_buffer, CHUNK_BUFFER_SIZE);
+        const int32_t read_result = ser_.readSerial(chunk_buffer, CHUNK_BUFFER_SIZE);
         auto arrival_time = steady_clock_.now();
+
+        if (0 > read_result)
+        {
+            handleDisconnect();
+            continue;
+        }
+
+        const uint32_t bytes_from_os = static_cast<uint32_t>(read_result);
 
         if(0 < bytes_from_os)
         {
@@ -856,10 +930,79 @@ void SerialApi::SerialRead()
             }
             cv_.notify_one();
         }
-        else
-        {
-            RCLCPP_ERROR_ONCE(node_->get_logger(),"[SerialApi] Error while reading serial, try again");
-        }
-        
+        /*0 = interrupted read (EINTR/EAGAIN) - read again*/
     }
+}
+
+void SerialApi::handleDisconnect()
+{
+    RCLCPP_ERROR(node_->get_logger(), "[SerialApi] FCU disconnected from %s (errno %d) - reconnecting every %ld ms",
+                 dev_.c_str(), ser_.last_errno_, static_cast<long>(RECONNECT_PERIOD.count()));
+
+    /*Stop the sensor stream immediately (hitl_binder checks isSynced) - the FCU clock restarts after a reboot, data stamped
+      with the old offset would be rejected by its plausibility gate anyway*/
+    offset_initialized_.store(false);
+
+    /*Close the port - waits for a write in progress, the TX thread then drops data until the reconnect*/
+    {
+        std::scoped_lock port_lock(port_mutex_);
+        port_connected_.store(false);
+        ser_.disconnect();
+    }
+
+    /*Queued TX data belongs to the old session*/
+    {
+        std::scoped_lock tx_lock(tx_serial_mutex_);
+        tx_queue_.clear();
+    }
+
+    /*RX flush, sync and LinkStats reset - applied by the Parser thread before the port is reopened*/
+    link_reset_request_.store(true);
+    {
+        std::lock_guard<std::mutex> lock(cv_mutex_);
+    }
+    cv_.notify_one();
+}
+
+bool SerialApi::tryReconnect()
+{
+    /*Reopen only after the Parser applied the reset - otherwise its RX flush could discard data of the new session*/
+    if (link_reset_request_.load())
+    {
+        return false;
+    }
+
+    std::scoped_lock port_lock(port_mutex_);
+
+    if (!ser_.connect(dev_, baudrate_, false))
+    {
+        RCLCPP_WARN_THROTTLE(node_->get_logger(), steady_clock_, 5000, "[SerialApi] Waiting for FCU on %s (errno %d)", dev_.c_str(), ser_.last_errno_);
+        return false;
+    }
+
+    port_connected_.store(true);
+    RCLCPP_INFO(node_->get_logger(), "[SerialApi] Reconnected to %s - waiting for time sync", dev_.c_str());
+    return true;
+}
+
+void SerialApi::applyLinkReset()
+{
+    /*Drop the remainder of the old session (a frame cut by the disconnect) - consumer side, tail := head*/
+    rx_tail_.store(rx_head_.load(std::memory_order_acquire), std::memory_order_release);
+
+    /*Time sync restarts from scratch - the first lucky heartbeat sets the offset directly*/
+    offset_initialized_.store(false);
+    rtt_buffer_.clear();
+    historical_min_rtt_ = 9999.0;
+    offset_jump_pending_ = false;
+
+    /*LinkStats - new baseline on the first report of the new session*/
+    {
+        std::scoped_lock lock(link_mutex_);
+        link_tx_marks_.fill(LinkTxMark{});
+    }
+    link_baseline_valid_ = false;
+
+    link_reset_request_.store(false);
+    RCLCPP_INFO(node_->get_logger(), "[SerialApi] Link state reset (RX flushed, time sync and LinkStats restarted)");
 }

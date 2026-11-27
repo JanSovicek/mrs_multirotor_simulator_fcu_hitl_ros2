@@ -47,7 +47,8 @@ bool SerialPort::connect(const std::string port, const int baudrate, const bool 
   serial_port_fd_ = open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
 
   if (serial_port_fd_ == -1) {
-    printf("could not open serial port %s", port.c_str());
+    /*Reported (throttled) by the caller - connect() is retried periodically while the FCU is re-enumerating*/
+    last_errno_ = errno;
     return false;
 
   } else {
@@ -109,7 +110,8 @@ bool SerialPort::connect(const std::string port, const int baudrate, const bool 
     }
     default:
       baudrate_set = 0;
-      printf("Unsupported baudrate");
+      printf("Unsupported baudrate\n");
+      disconnect(); /*do not leak the opened fd*/
       return false;
   }
 
@@ -220,15 +222,11 @@ void SerialPort::setBlocking(int fd, int should_block) {
 
 void SerialPort::disconnect() {
 
-  // TODO(lfr) wait for thread to finish
-  try {
-
+  /*close() does not throw - mark the fd invalid so a later read/write fails with EBADF instead of hitting a reused fd*/
+  if (serial_port_fd_ >= 0) {
     close(serial_port_fd_);
   }
-  catch (int e) {
-
-    printf("Error while closing the sensor serial line!\n");
-  }
+  serial_port_fd_ = -1;
 }
 
 //}
@@ -287,27 +285,30 @@ bool SerialPort::sendCharArray(uint8_t* buffer, int len) {
 //}
 
 /* read() //{ */
-uint32_t SerialPort::readSerial(uint8_t* arr, uint32_t arr_max_size) {
-  
-  uint32_t nBytesRead = 0U;
+int32_t SerialPort::readSerial(uint8_t* arr, uint32_t arr_max_size) {
 
-  int readResult = read(serial_port_fd_, arr, static_cast<size_t>(arr_max_size));
+  const ssize_t readResult = read(serial_port_fd_, arr, static_cast<size_t>(arr_max_size));
 
-  if(0 < readResult)
+  if (0 < readResult)
   {
-    nBytesRead = static_cast<uint32_t>(readResult);
-  }
-  else if(0 == readResult)
-  {
-    /*End of file reached - let nBytesRead = 0U*/
-  }
-  else
-  {
-    /*Error occurred - let nBytesRead = 0U*/
-    printf("Error while reading from serial line!\n");
+    return static_cast<int32_t>(readResult);
   }
 
-  return nBytesRead;
+  if (0 == readResult)
+  {
+    /*Blocking read (VMIN = 1) returns 0 only on hang-up - the device is gone*/
+    last_errno_ = 0;
+    return -1;
+  }
+
+  if ((EINTR == errno) || (EAGAIN == errno))
+  {
+    return 0;
+  }
+
+  /*EIO/ENODEV after a USB disconnect (FCU reset), EBADF on a closed port*/
+  last_errno_ = errno;
+  return -1;
 }
 
 //}

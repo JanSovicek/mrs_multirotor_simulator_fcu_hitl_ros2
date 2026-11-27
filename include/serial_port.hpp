@@ -35,13 +35,16 @@ public:
   /**
    * @param arr buffer array to long incoming data
    * @param arr_max_size length of the buffer array
-   * 
-   * @return 0U in case of out of file or error occurred,
-   * @return number of read bytes otherwise
+   *
+   * @return number of read bytes (> 0),
+   * @return 0 if interrupted (EINTR/EAGAIN) - call again,
+   * @return -1 if the port is gone (EOF = hang-up, EIO/ENODEV after a USB disconnect, closed fd) - reconnect,
+   *         the errno is kept in last_errno_
    */
-  uint32_t readSerial(uint8_t* arr, uint32_t arr_max_size);
+  int32_t readSerial(uint8_t* arr, uint32_t arr_max_size);
 
-  int      serial_port_fd_;
+  int      serial_port_fd_ = -1;
+  int      last_errno_     = 0;
   uint8_t  input_buffer[1024];
   uint16_t input_it = 0;
 };

@@ -48,6 +48,24 @@ private:
     SerialPort ser_;
     umsg_MessageToTransfer recvdMsg_;
 
+    /*Reconnect after an FCU reset (USB re-enumeration). SerialRead owns the port lifetime: it detects the disconnect,
+      closes the port and reopens it periodically. The TX thread writes only under port_mutex_ while connected*/
+    std::string dev_;
+    int         baudrate_ = 0;
+    std::mutex  port_mutex_;                          /*serialises write() against close()/connect()*/
+    std::atomic<bool> port_connected_{false};
+    /*Set by SerialRead on a disconnect, applied and cleared by the Parser thread (owner of rx_tail_, the RTT gate and the
+      LinkStats state): RX ring flush, time sync and LinkStats reset. The port is reopened only after it was applied*/
+    std::atomic<bool> link_reset_request_{false};
+    static constexpr std::chrono::milliseconds RECONNECT_PERIOD{500};
+    /*A lucky heartbeat whose offset differs from the filtered one by more than this is a clock restart (FCU reboot) - the
+      offset is taken directly instead of being averaged in over tens of seconds*/
+    static constexpr int64_t OFFSET_JUMP_REINIT_NS = 100000000; /*100 ms*/
+
+    void handleDisconnect();
+    bool tryReconnect();
+    void applyLinkReset();
+
     std::unique_ptr<CountingSemaphore> q_lock_;
     std::queue<umsg_MessageToTransfer> outQ_;
     std::mutex outQ_mutex_; /*Protects outQ_ - pushed by the Parser thread, popped by the messageParser thread*/
@@ -118,12 +136,21 @@ private:
 
     void handleLinkStats(const umsg_debug_LinkStats_t& stats);
 
+    /*Lucky-packet gate reference: minimum RTT over the last SYNC_WINDOW_SIZE heartbeats (1 Hz -> 10 s), all heartbeats
+      enter the window (accepted or not), so a once-in-a-lifetime low RTT ages out instead of rejecting everything forever*/
     static constexpr uint32_t SYNC_WINDOW_SIZE = 10;
     std::deque<double> rtt_buffer_;
     double filtered_delay_ms_ = -1.0;
 
     const double alpha = 0.1; // Smoothing factor (0.0 to 1.0)
-    double historical_min_rtt_ = 9999.0;
+    double historical_min_rtt_ = 9999.0;              /*min of rtt_buffer_ - Parser thread only*/
+
+    /*Offset jump confirmation (two-sample, as TimeStepGuard): a lucky heartbeat whose offset jumps by more than
+      OFFSET_JUMP_REINIT_NS only becomes a candidate, the offset is re-initialized when the next lucky heartbeat agrees with
+      the candidate within OFFSET_JUMP_CONFIRM_NS. A heartbeat agreeing with the old offset drops the candidate*/
+    static constexpr int64_t OFFSET_JUMP_CONFIRM_NS = 10000000; /*10 ms*/
+    bool    offset_jump_pending_      = false;
+    int64_t offset_jump_candidate_ns_ = 0;
     std::atomic<int64_t> smoothed_offset_ns_{0};
     std::atomic<bool> offset_initialized_{false};
 
